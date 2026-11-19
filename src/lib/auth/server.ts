@@ -115,21 +115,39 @@ const baseURL = explicitBaseURL ?? {
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
-// A self-hosted install is opened at whatever host:port the browser uses
-// (for example http://rf.jtlive.tech:8080) even when BETTER_AUTH_URL omitted
-// the port. Trust that request when its Origin host matches the Host header,
-// which is the same-origin check without listing every address in advance.
+// The public site is often HTTPS in front of the container, while
+// BETTER_AUTH_URL is the plain HTTP address (and the proxy may rewrite Host
+// to localhost). Trust the configured host on either scheme, the forwarded
+// host, and a browser same-origin post. A page on another site cannot set
+// Sec-Fetch-Site.
 const trustedOrigins = (request?: Request): string[] => {
-  const origins = new Set<string>([
-    ...(explicitBaseURL ? [explicitBaseURL] : []),
-    ...LOCAL_DEV_ORIGINS,
-  ]);
+  const origins = new Set<string>(LOCAL_DEV_ORIGINS);
+  if (explicitBaseURL) {
+    origins.add(explicitBaseURL);
+    try {
+      const configured = new URL(explicitBaseURL);
+      origins.add(`https://${configured.host}`);
+      origins.add(`http://${configured.host}`);
+      origins.add(`https://${configured.hostname}`);
+      origins.add(`http://${configured.hostname}`);
+    } catch {
+      /* ignore a bad BETTER_AUTH_URL */
+    }
+  }
   const originHeader = request?.headers.get("origin");
-  const host = request?.headers.get("host")?.split(",")[0]?.trim();
-  if (originHeader && host) {
+  if (originHeader) {
+    const forwarded =
+      request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+      request?.headers.get("host")?.split(",")[0]?.trim();
     try {
       const originUrl = new URL(originHeader);
-      if (originUrl.host === host) origins.add(originUrl.origin);
+      const forwardedHost = forwarded?.replace(/:\d+$/, "");
+      if (
+        (forwarded && (originUrl.host === forwarded || originUrl.hostname === forwardedHost)) ||
+        request?.headers.get("sec-fetch-site") === "same-origin"
+      ) {
+        origins.add(originUrl.origin);
+      }
     } catch {
       /* ignore a malformed Origin */
     }
