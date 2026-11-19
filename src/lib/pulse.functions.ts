@@ -73,6 +73,7 @@ type EventRow = {
   blockers: string;
   created_at: string;
   share_token: string | null;
+  plot_locked: boolean;
 };
 
 type ZoneRow = { id: string; event_id: string; name: string; isolated: boolean };
@@ -102,6 +103,9 @@ type RequestRow = {
   tuned_by: string | null;
   spare: boolean;
   power_mw: number;
+  flag_reason: string | null;
+  flagged_mhz: number | null;
+  walkup: boolean;
 };
 type ScanRow = {
   id: string;
@@ -162,7 +166,13 @@ async function logActivity(sql: Sql, eventId: string, userId: string, message: s
   `;
 }
 
-function toItems(requests: RequestRow[], zones: ZoneRow[]): CoordItem[] {
+function toItems(requests: RequestRow[], zones: ZoneRow[], groups: { zone_id: string; group_id: string }[] = []): CoordItem[] {
+  const byZone = new Map<string, string[]>();
+  for (const g of groups) {
+    const cur = byZone.get(g.zone_id) ?? [];
+    cur.push(g.group_id);
+    byZone.set(g.zone_id, cur);
+  }
   const zoneMap = new Map(zones.map((z) => [z.id, z]));
   return requests.map((r) => {
     const zone = r.zone_id ? zoneMap.get(r.zone_id) : undefined;
@@ -175,6 +185,7 @@ function toItems(requests: RequestRow[], zones: ZoneRow[]): CoordItem[] {
       mode: r.mode === "band" ? "band" : "carrier",
       zoneId: zone?.id ?? "site",
       isolated: zone ? zone.isolated : false,
+      groupIds: zone ? byZone.get(zone.id) ?? [] : [],
       t0: parseClock(r.time_start),
       t1: parseClock(r.time_end),
       priority: priorityRank(r.priority),
@@ -203,6 +214,14 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
   const event = events[0];
   if (!event) throw new Error("Event not found.");
   const zones = await sql<ZoneRow>`select * from zones where event_id = ${eventId} order by name`;
+  const groupRows = await sql<{ id: string; name: string; zone_id: string | null }>`
+    select g.id, g.name, gz.zone_id
+    from area_groups g
+    left join area_group_zones gz on gz.group_id = g.id
+    where g.event_id = ${eventId}
+    order by g.name
+  `;
+  const groupLinks = groupRows.filter((g) => g.zone_id).map((g) => ({ zone_id: g.zone_id as string, group_id: g.id }));
   const requests = await sql<RequestRow>`
     select * from requests where event_id = ${eventId} order by category, label
   `;
@@ -246,8 +265,17 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     locked: flag(r.locked),
     assigned_mhz: r.assigned_mhz == null ? null : num(r.assigned_mhz),
   }));
+  const holds = await sql<{ id: string; zone_id: string | null; mhz: number; label: string }>`
+    select id, zone_id, mhz, label from holds where event_id = ${eventId} order by mhz
+  `;
   const blockers = allBlockers(event, scans);
-  const items = toItems(requestsClean, zonesClean);
+  for (const hold of holds) blockers.push({ min: num(hold.mhz) - 0.1, max: num(hold.mhz) + 0.1, label: hold.label });
+  for (const r of requestsClean) {
+    if (r.flag_reason && r.flagged_mhz != null) {
+      blockers.push({ min: num(r.flagged_mhz) - 0.25, max: num(r.flagged_mhz) + 0.25, label: `Interference: ${r.flag_reason}` });
+    }
+  }
+  const items = toItems(requestsClean, zonesClean, groupLinks);
   const assigned: Record<string, number | null> = {};
   for (const r of requestsClean) assigned[r.id] = r.assigned_mhz;
   const issues = audit(
@@ -283,6 +311,8 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     members,
     activity,
     issues,
+    groups: [...new Map(groupRows.map((g) => [g.id, { id: g.id, name: g.name, zoneIds: groupRows.filter((r) => r.id === g.id && r.zone_id).map((r) => r.zone_id as string) }])).values()],
+    holds: holds.map((h) => ({ ...h, mhz: num(h.mhz) })),
     batches,
     intermods: intermodHits(
       requestsClean
@@ -696,7 +726,13 @@ async function runCalc(sql: Sql, eventId: string, userId: string) {
   const requests = await sql<RequestRow>`select * from requests where event_id = ${eventId}`;
   const scans = await sql<ScanRow>`select * from scans where event_id = ${eventId}`;
   const spacing = event.spacing === "resilience" || event.spacing === "density" ? event.spacing : "balanced";
-  const result = coordinate(toItems(requests, zones), allBlockers(event, scans), spacing, spectrumRuleFor(event.region));
+  const groupLinks = await sql<{ zone_id: string; group_id: string }>`
+    select gz.zone_id, gz.group_id
+    from area_group_zones gz
+    join area_groups g on g.id = gz.group_id
+    where g.event_id = ${eventId}
+  `;
+  const result = coordinate(toItems(requests, zones, groupLinks), allBlockers(event, scans), spacing, spectrumRuleFor(event.region));
   for (const r of requests) {
     if (r.locked && r.assigned_mhz != null) continue;
     const mhz = result[r.id] ?? null;
@@ -1100,6 +1136,7 @@ export const markTuned = createServerFn({ method: "POST" })
           tuned_by = ${data.tuned ? context.userId : null}
       where id = ${data.requestId}
     `;
+    await history(sql, data.eventId, data.requestId, context.userId, data.tuned ? "tuned" : "untuned", data.tuned ? "Tuned" : "Cleared tuned");
     return loadBundle(sql, data.eventId, context.userId);
   });
 
@@ -1140,4 +1177,215 @@ export const markNotificationsRead = createServerFn({ method: "POST" })
     const sql = await getSql();
     await sql`update notifications set read_at = now() where user_id = ${context.userId} and read_at is null`;
     return { ok: true };
+  });
+
+async function history(sql: Sql, eventId: string, requestId: string, userId: string, action: string, detail: string) {
+  await sql`
+    insert into line_history (id, request_id, event_id, user_id, action, detail)
+    values (${uid()}, ${requestId}, ${eventId}, ${userId}, ${action}, ${detail.slice(0, 240)})
+  `;
+}
+
+export const flagLine = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    requestId: z.string().min(1),
+    reason: z.enum(["interference", "pack failed", "spare now live"]),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const rows = await sql<{ assigned_mhz: number | null; label: string }>`
+      select assigned_mhz, label from requests where id = ${data.requestId} and event_id = ${data.eventId}
+    `;
+    const row = rows[0];
+    if (!row) throw new Error("Request not found.");
+    await sql`
+      update requests
+      set flag_reason = ${data.reason},
+          flagged_mhz = ${row.assigned_mhz},
+          assigned_mhz = ${null},
+          locked = ${false},
+          tuned_at = ${null},
+          tuned_by = ${null}
+      where id = ${data.requestId}
+    `;
+    await history(sql, data.eventId, data.requestId, context.userId, "flagged", `${data.reason} at ${row.assigned_mhz ?? "unassigned"}`);
+    await logActivity(sql, data.eventId, context.userId, `Flagged ${row.label}: ${data.reason}.`);
+    const managers = await sql<{ user_id: string }>`select user_id from event_members where event_id = ${data.eventId} and role = ${"manager"}`;
+    for (const m of managers) {
+      await sql`insert into notifications (id, user_id, event_id, message) values (${uid()}, ${m.user_id}, ${data.eventId}, ${`${row.label} flagged: ${data.reason}`})`;
+    }
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const clearFlag = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update requests set flag_reason = ${null}, flagged_mhz = ${null} where id = ${data.requestId}`;
+    await history(sql, data.eventId, data.requestId, context.userId, "cleared", "Interference cleared");
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const sendBack = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), batchId: z.string().min(1), note: z.string().trim().min(1).max(400) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update request_batches set status = ${"submitted"}, return_note = ${data.note} where id = ${data.batchId}`;
+    await logActivity(sql, data.eventId, context.userId, `Sent a request back: ${data.note}`);
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const copyBatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), batchId: z.string().min(1), zoneId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const batches = await sql<{ title: string; notes: string; priority: string }>`select title, notes, priority from request_batches where id = ${data.batchId}`;
+    const batch = batches[0];
+    if (!batch) throw new Error("Request not found.");
+    const id = uid();
+    await sql`
+      insert into request_batches (id, event_id, zone_id, created_by, title, status, notes, priority)
+      values (${id}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${batch.title + " copy"}, ${"submitted"}, ${batch.notes}, ${batch.priority})
+    `;
+    const lines = await sql<RequestRow>`select * from requests where batch_id = ${data.batchId}`;
+    for (const line of lines) {
+      await sql`
+        insert into requests (
+          id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
+          band_min, band_max, bandwidth, mode, notes, batch_id, spare, power_mw, priority
+        ) values (
+          ${uid()}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${line.category}, ${line.label},
+          ${line.device_key}, ${line.device_name}, ${line.manufacturer}, ${line.band_min}, ${line.band_max},
+          ${line.bandwidth}, ${line.mode}, ${line.notes}, ${id}, ${line.spare}, ${line.power_mw ?? 10}, ${line.priority}
+        )
+      `;
+    }
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const addHold = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), zoneId: z.string().min(1), mhz: z.number(), label: z.string().trim().max(40).optional().default("Hold") }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`insert into holds (id, event_id, zone_id, mhz, label, created_by) values (${uid()}, ${data.eventId}, ${data.zoneId}, ${data.mhz}, ${data.label ?? "Hold"}, ${context.userId})`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const deleteHold = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), holdId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`delete from holds where id = ${data.holdId} and event_id = ${data.eventId}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const addWalkup = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    zoneId: z.string().min(1),
+    label: z.string().trim().min(1).max(80),
+    mhz: z.number(),
+    deviceName: z.string().optional().default("Walk-up"),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const id = uid();
+    await sql`
+      insert into requests (
+        id, event_id, zone_id, created_by, category, label, device_key, device_name,
+        band_min, band_max, bandwidth, mode, assigned_mhz, locked, walkup, power_mw
+      ) values (
+        ${id}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${"audio"}, ${data.label},
+        ${"walkup"}, ${data.deviceName ?? "Walk-up"}, ${data.mhz - 1}, ${data.mhz + 1}, ${0.2}, ${"carrier"},
+        ${data.mhz}, ${true}, ${true}, ${10}
+      )
+    `;
+    await history(sql, data.eventId, id, context.userId, "assigned", `Walk-up at ${data.mhz}`);
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const saveGroup = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), name: z.string().trim().min(1).max(60), zoneIds: z.array(z.string()).min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const id = uid();
+    await sql`insert into area_groups (id, event_id, name) values (${id}, ${data.eventId}, ${data.name})`;
+    for (const zoneId of data.zoneIds) {
+      await sql`insert into area_group_zones (group_id, zone_id) values (${id}, ${zoneId}) on conflict do nothing`;
+    }
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const deleteGroup = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), groupId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`delete from area_groups where id = ${data.groupId} and event_id = ${data.eventId}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const setPlotLock = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), locked: z.boolean() }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update events set plot_locked = ${data.locked} where id = ${data.eventId}`;
+    if (data.locked) {
+      await sql`update requests set locked = ${true} where event_id = ${data.eventId} and assigned_mhz is not null`;
+    }
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const beat = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "viewer");
+    const users = await sql<{ name: string }>`select name from "user" where id = ${context.userId}`;
+    await sql`
+      insert into presence (event_id, user_id, name, last_seen)
+      values (${data.eventId}, ${context.userId}, ${users[0]?.name ?? "Someone"}, now())
+      on conflict (event_id, user_id) do update set last_seen = now(), name = ${users[0]?.name ?? "Someone"}
+    `;
+    return sql<{ user_id: string; name: string }>`
+      select user_id, name from presence
+      where event_id = ${data.eventId} and last_seen > now() - interval '20 seconds'
+    `;
+  });
+
+export const lineHistory = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "viewer");
+    return sql<{ action: string; detail: string; created_at: string; name: string | null }>`
+      select h.action, h.detail, h.created_at, u.name
+      from line_history h
+      left join "user" u on u.id = h.user_id
+      where h.request_id = ${data.requestId}
+      order by h.created_at desc
+      limit 12
+    `;
   });

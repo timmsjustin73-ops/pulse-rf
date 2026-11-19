@@ -41,6 +41,11 @@ function Dashboard() {
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [code, setCode] = useState("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromQr = params.get("code");
+    if (fromQr) setCode(fromQr.toUpperCase());
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;

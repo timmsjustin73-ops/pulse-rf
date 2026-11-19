@@ -38,13 +38,25 @@ import {
   submitBatch,
   markTuned,
   setMemberCompany,
+  flagLine,
+  clearFlag,
+  sendBack,
+  copyBatch,
+  addHold,
+  deleteHold,
+  addWalkup,
+  saveGroup,
+  deleteGroup,
+  setPlotLock,
+  beat,
 } from "@/lib/pulse.functions";
+import QRCode from "qrcode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/events/$eventId")({ component: EventRoute });
 
 type Bundle = Awaited<ReturnType<typeof getEvent>>;
-type Tab = "plot" | "mine" | "request" | "zones" | "scans" | "antennas" | "settings" | "sheet";
+type Tab = "coord" | "mine" | "zones" | "scans" | "antennas" | "settings" | "sheet";
 
 function EventRoute() {
   return (
@@ -61,13 +73,23 @@ function EventScreen() {
   const [data, setData] = useState<Bundle | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [tab, setTab] = useState<Tab>("plot");
+  const [tab, setTab] = useState<Tab>("coord");
   const [custom, setCustom] = useState<Awaited<ReturnType<typeof listCustomDevices>>>([]);
+  const [people, setPeople] = useState<{ user_id: string; name: string }[]>([]);
+  const [qr, setQr] = useState("");
 
   async function reload() {
     const next = await getEvent({ data: { eventId } });
     setData(next);
   }
+
+  useEffect(() => {
+    if (!user?.id || !eventId) return;
+    const ping = () => void beat({ data: { eventId } }).then(setPeople).catch(() => undefined);
+    ping();
+    const timer = window.setInterval(ping, 8000);
+    return () => window.clearInterval(timer);
+  }, [user?.id, eventId]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -84,8 +106,12 @@ function EventScreen() {
         if (!cancel) setCustom(rows);
       })
       .catch(() => undefined);
+    const poll = window.setInterval(() => {
+      void getEvent({ data: { eventId } }).then((next) => { if (!cancel) setData(next); }).catch(() => undefined);
+    }, 5000);
     return () => {
       cancel = true;
+      window.clearInterval(poll);
     };
   }, [user?.id, eventId]);
 
@@ -139,6 +165,16 @@ function EventScreen() {
           >
             Copy code
           </button>
+          <button
+            type="button"
+            className={ghostClass}
+            onClick={() => {
+              const url = `${window.location.origin}/?code=${data.event.join_code}`;
+              void QRCode.toDataURL(url).then(setQr);
+            }}
+          >
+            QR
+          </button>
           {manager && (
             <>
               <button
@@ -166,14 +202,15 @@ function EventScreen() {
         <Stat label="Conflicts" value={String(bad)} warn={bad > 0} />
         <Stat label="Spacing" value={data.event.spacing} />
       </div>
+      {people.length > 1 && <p className="text-xs text-muted">{people.length} people here: {people.map((p) => p.name).join(", ")}</p>}
+      {qr && <img src={qr} alt="Join QR" className="h-36 w-36 rounded-lg bg-white p-2" />}
       {error && <Banner tone="bad">{error}</Banner>}
       <div className="no-print flex gap-1 overflow-x-auto">
         {(
           [
-            ["plot", "Plot"],
+            ["coord", manager ? "Coordinate" : "Plot"],
             ["mine", "My requests"],
-            ["request", "Request"],
-            ["zones", "Zones"],
+            ["zones", "Areas"],
             ["scans", "Scans"],
             ["antennas", "Antennas"],
             ["settings", "Settings"],
@@ -193,11 +230,8 @@ function EventScreen() {
           </button>
         ))}
       </div>
-      {tab === "plot" && <Plot data={visible} manager={manager} busy={busy} run={run} />}
+      {tab === "coord" && <Coordinate data={visible} manager={manager} busy={busy} run={run} eventId={eventId} />}
       {tab === "mine" && <MyRequests data={visible} custom={custom} canRequest={canRequest} busy={busy} run={run} />}
-      {tab === "request" && (
-        <RequestForm data={data} custom={custom} canRequest={canRequest} busy={busy} run={run} />
-      )}
       {tab === "zones" && <Zones data={data} manager={manager} busy={busy} run={run} />}
       {tab === "scans" && <Scans data={data} canRequest={canRequest} manager={manager} busy={busy} run={run} />}
       {tab === "antennas" && <Antennas data={data} manager={manager} busy={busy} run={run} />}
@@ -212,6 +246,98 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
     <div className="rounded-xl border border-border bg-surface px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
       <p className={"font-mono text-lg tabular-nums " + (warn ? "text-bad" : "text-fg")}>{value}</p>
+    </div>
+  );
+}
+
+function Coordinate({
+  data,
+  manager,
+  busy,
+  run,
+  eventId,
+}: {
+  data: Bundle;
+  manager: boolean;
+  busy: string;
+  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
+  eventId: string;
+}) {
+  const [layout, setLayout] = useState<"tabs" | "page">(() => (typeof window === "undefined" ? "tabs" : (localStorage.getItem("pulse-layout") as "tabs" | "page") || "tabs"));
+  const [section, setSection] = useState<"plot" | "conflicts" | "antenna" | "scans" | "sheet">("plot");
+  const [seen, setSeen] = useState(data.requests.length + data.requests.filter((r) => r.flag_reason).length);
+  useEffect(() => {
+    const next = data.requests.length + data.requests.filter((r) => r.flag_reason).length;
+    if (manager && next > seen) {
+      try { void new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=").play(); } catch { /* ignore */ }
+    }
+    setSeen(next);
+  }, [data.requests, manager, seen]);
+  function choose(next: "tabs" | "page") {
+    setLayout(next);
+    localStorage.setItem("pulse-layout", next);
+  }
+  const plot = <Plot data={data} manager={manager} busy={busy} run={run} />;
+  const conflicts = (
+    <div className="space-y-3">
+      {data.intermods.length === 0 && <p className="text-sm text-muted">No intermod hits on assigned carriers.</p>}
+      {data.intermods.map((hit) => (
+        <p key={`${hit.order}-${hit.formula}`} className="text-sm">
+          <span className="font-mono text-primary">{hit.order}</span> {hit.formula} → {formatMhz(hit.product)} hits {hit.hits}
+          <span className="ml-2 text-xs uppercase">{hit.severity} · {hit.powerMw} mW</span>
+        </p>
+      ))}
+      {data.issues.map((issue, i) => <p key={i} className="text-sm text-bad">{issue.message}</p>)}
+    </div>
+  );
+  if (!manager) return plot;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={ghostClass} onClick={() => choose(layout === "tabs" ? "page" : "tabs")}>
+          {layout === "tabs" ? "One page" : "Tabs"}
+        </button>
+        <button type="button" className={ghostClass} onClick={() => run("lock", () => setPlotLock({ data: { eventId, locked: !data.event.plot_locked } }))}>
+          {data.event.plot_locked ? "Unlock plot" : "Lock plot"}
+        </button>
+      </div>
+      {layout === "tabs" && (
+        <div className="flex gap-1 overflow-x-auto">
+          {(["plot", "conflicts", "antenna", "scans", "sheet"] as const).map((id) => (
+            <button key={id} type="button" onClick={() => setSection(id)} className={"h-9 rounded-full px-3 text-sm " + (section === id ? "bg-primary text-primary-fg" : "border border-border text-muted")}>{id}</button>
+          ))}
+        </div>
+      )}
+      {(layout === "page" || section === "plot") && plot}
+      {(layout === "page" || section === "conflicts") && conflicts}
+      {(layout === "page" || section === "antenna") && <Antennas data={data} manager={manager} busy={busy} run={run} />}
+      {(layout === "page" || section === "scans") && <Scans data={data} canRequest={manager} manager={manager} busy={busy} run={run} />}
+      {(layout === "page" || section === "sheet") && <Sheet data={data} />}
+      <Holds data={data} busy={busy} run={run} />
+    </div>
+  );
+}
+
+function Holds({ data, busy, run }: { data: Bundle; busy: string; run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void> }) {
+  const [mhz, setMhz] = useState("");
+  const [label, setLabel] = useState("Hold");
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="font-medium">Holds and walk-ups</h3>
+      <ul className="mt-2 space-y-1 text-sm">
+        {data.holds.map((h) => (
+          <li key={h.id} className="flex justify-between">
+            <span>{h.label} · {formatMhz(h.mhz)}</span>
+            <button type="button" className="text-xs text-bad" onClick={() => run("hold", () => deleteHold({ data: { eventId: data.event.id, holdId: h.id } }))}>Release</button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input className={fieldClass + " max-w-28"} value={mhz} onChange={(e) => setMhz(e.target.value)} placeholder="MHz" />
+        <input className={fieldClass + " max-w-32"} value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button type="button" className={ghostClass} disabled={busy !== ""} onClick={() => run("hold", () => addHold({ data: { eventId: data.event.id, zoneId: data.zones[0]?.id ?? "", mhz: Number(mhz), label } }))}>Hold</button>
+        <button type="button" className={ghostClass} disabled={busy !== ""} onClick={() => run("walk", () => addWalkup({ data: { eventId: data.event.id, zoneId: data.zones[0]?.id ?? "", label: label || "Walk-up", mhz: Number(mhz) } }))}>Walk-up</button>
+      </div>
     </div>
   );
 }
@@ -341,6 +467,28 @@ function Plot({
                     />
                     {r.tuned_at ? "Tuned" : "Not tuned"}
                   </label>
+                </td>
+                                <td className="px-3 py-2 text-xs">
+                  {r.flag_reason ? (
+                    <span>
+                      <s>{r.flagged_mhz ? formatMhz(r.flagged_mhz) : ""}</s> {r.flag_reason}
+                      {manager && <button type="button" className="ml-2 underline" onClick={() => run("flag", () => clearFlag({ data: { eventId: data.event.id, requestId: r.id } }))}>Clear</button>}
+                    </span>
+                  ) : (
+                    <select
+                      className={fieldClass}
+                      defaultValue=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        void run("flag", () => flagLine({ data: { eventId: data.event.id, requestId: r.id, reason: e.target.value as "interference" | "pack failed" | "spare now live" } }));
+                      }}
+                    >
+                      <option value="">Flag</option>
+                      <option value="interference">Interference</option>
+                      <option value="pack failed">Pack failed</option>
+                      <option value="spare now live">Spare now live</option>
+                    </select>
+                  )}
                 </td>
                 {manager && (
                   <td className="px-3 py-2">
@@ -513,11 +661,13 @@ function MyRequests({
           <label>Qty
             <input className={fieldClass + " ml-2 w-16"} type="number" min={1} max={8} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} />
           </label>
-          <label>Power
-            <select className={fieldClass + " ml-2"} value={power} onChange={(e) => setPower(Number(e.target.value))}>
-              {(device ? powerOptions(device.power) : [10]).map((mw) => <option key={mw} value={mw}>{mw} mW</option>)}
-            </select>
-          </label>
+          <div>Power options
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(device ? powerOptions(device.power) : [10]).map((mw) => (
+                <button key={mw} type="button" onClick={() => setPower(mw)} className={"rounded-full px-3 py-1 text-xs " + (power === mw ? "bg-primary text-primary-fg" : "border border-border")}>{mw} mW</button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="mt-3 flex gap-2">
           <button type="button" className={ghostClass} onClick={addLine}>Add line</button>
@@ -738,7 +888,7 @@ function Zones({
   data: Bundle;
   manager: boolean;
   busy: string;
-  run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
+  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [isolated, setIsolated] = useState(true);
@@ -784,6 +934,38 @@ function Zones({
           <button className={btnClass} type="submit" disabled={busy !== ""}>Add zone</button>
         </form>
       )}
+      {manager && <Groups data={data} busy={busy} run={run} />}
+    </div>
+  );
+}
+
+function Groups({ data, busy, run }: { data: Bundle; busy: string; run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="font-medium">Groups</h3>
+      <p className="mt-1 text-sm text-muted">Areas in the same group are coordinated together. Ungrouped areas can reuse a frequency.</p>
+      <ul className="mt-2 space-y-1 text-sm">
+        {data.groups.map((g) => (
+          <li key={g.id} className="flex justify-between gap-3">
+            <span>{g.name}: {g.zoneIds.map((id) => data.zones.find((z) => z.id === id)?.name ?? id).join(", ")}</span>
+            <button type="button" className="text-xs text-bad" onClick={() => run("group", () => deleteGroup({ data: { eventId: data.event.id, groupId: g.id } }))}>Remove</button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 space-y-2">
+        <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Stage cluster" />
+        <div className="flex flex-wrap gap-2 text-sm">
+          {data.zones.map((z) => (
+            <label key={z.id} className="flex items-center gap-1">
+              <input type="checkbox" checked={picked.includes(z.id)} onChange={(e) => setPicked((cur) => e.target.checked ? [...cur, z.id] : cur.filter((id) => id !== z.id))} />
+              {z.name}
+            </label>
+          ))}
+        </div>
+        <button type="button" className={btnClass} disabled={busy !== "" || !name.trim() || picked.length === 0} onClick={() => run("group", () => saveGroup({ data: { eventId: data.event.id, name: name.trim(), zoneIds: picked } }))}>Save group</button>
+      </div>
     </div>
   );
 }
@@ -807,8 +989,18 @@ function Scans({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Paste a scan as frequency, level. Hits at or above the threshold become keep-outs. Recalculate after importing.
+        Paste a scan, or upload a CSV, Wireless Workbench, or WSM text export. Hits at or above the threshold become keep-outs.
       </p>
+      <input
+        type="file"
+        accept=".csv,.txt,.wsm,.sdb,.xml"
+        className="text-sm"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          void file.text().then((body) => { setBody(body); setLabel(file.name); });
+        }}
+      />
       <ul className="space-y-2">
         {data.scans.map((s) => (
           <li key={s.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">

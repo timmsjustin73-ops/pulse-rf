@@ -10,6 +10,7 @@ export type CoordItem = {
   mode: "carrier" | "band";
   zoneId: string;
   isolated: boolean;
+  groupIds?: string[];
   t0: number | null;
   t1: number | null;
   priority: number;
@@ -43,6 +44,7 @@ type Foot = {
   mode: "carrier" | "band";
   zoneId: string;
   isolated: boolean;
+  groupIds?: string[];
   t0: number | null;
   t1: number | null;
   powerMw?: number;
@@ -126,13 +128,10 @@ function ruleApplies(item: CoordItem, rule: SpectrumRule | null): rule is Spectr
 }
 
 function together(a: Foot, b: Foot): boolean {
-  const time =
-    a.t0 == null || a.t1 == null || b.t0 == null || b.t1 == null
-      ? true
-      : a.t0 < b.t1 && b.t0 < a.t1;
-  if (!time) return false;
-  if (!a.isolated || !b.isolated) return true;
-  return a.zoneId === b.zoneId;
+  const left = a.groupIds ?? [];
+  const right = b.groupIds ?? [];
+  if (left.length === 0 || right.length === 0) return false;
+  return left.some((id) => right.includes(id));
 }
 
 function rangesOverlap(aMin: number, aMax: number, bMin: number, bMax: number, guard: number): boolean {
@@ -149,6 +148,7 @@ function footprint(item: CoordItem, center: number): Foot {
       mode: "band",
       zoneId: item.zoneId,
       isolated: item.isolated,
+      groupIds: item.groupIds,
       t0: item.t0,
       t1: item.t1,
       powerMw: item.powerMw ?? 10,
@@ -163,6 +163,7 @@ function footprint(item: CoordItem, center: number): Foot {
     mode: "carrier",
     zoneId: item.zoneId,
     isolated: item.isolated,
+    groupIds: item.groupIds,
     t0: item.t0,
     t1: item.t1,
     powerMw: item.powerMw ?? 10,
