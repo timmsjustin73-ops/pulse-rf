@@ -31,7 +31,7 @@ services:
     environment:
       DATABASE_URL: postgres://pulse:pulse@db:5432/pulse
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-pulse-rf-local-install-secret-change-me}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://rf.jtlive.tech}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://rf.jtlive.tech:8080}
       HOST: 0.0.0.0
       PORT: "8080"
       NITRO_HOST: 0.0.0.0
