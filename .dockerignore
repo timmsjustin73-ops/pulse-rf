@@ -1,0 +1,16 @@
+node_modules
+.vercel
+.output
+dist
+.git
+screenshots
+artifacts
+*.log
+AGENTS.md
+AGENTS.project.md
+.grok/skills
+.grok/references
+.grok/preview.log
+.grok/preview.pid
+.grok/status
+.grok/project_memory.md

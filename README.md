@@ -4,7 +4,30 @@ Browser frequency coordination for wireless audio, video, lighting and comms.
 
 Sign in, open an event, and build a plot: device ranges, a 5 kHz radio-mic grid, zone isolation, time windows, scan keep-outs and an intermod check. It is a planning aid, not a licence and not a live TV database.
 
-## Run it
+## Install with Docker
+
+This runs the whole planner: sign-in, events, the device library, and a Postgres database that keeps your plots.
+
+```bash
+git clone https://github.com/timmsjustin73-ops/pulse-rf.git
+cd pulse-rf
+docker compose up -d --build
+```
+
+Open http://localhost:8080 and create an account with email and password.
+
+Google and X sign-in are for the hosted preview. On this Docker install, use email and password.
+
+Plots are stored in a Docker volume. They stay when you restart the container.
+
+```bash
+docker compose down       # stop
+docker compose down -v    # stop and delete the database
+```
+
+Change `BETTER_AUTH_SECRET` before you put this on a machine other people can reach. Open the site as http://localhost:8080 so the sign-in cookie is accepted.
+
+## Run it without Docker
 
 ```bash
 npm install
