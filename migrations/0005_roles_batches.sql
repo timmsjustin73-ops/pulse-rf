@@ -44,3 +44,6 @@ create table if not exists company_members (
 create index if not exists company_members_user_idx on company_members (user_id);
 
 alter table requests add column if not exists spare boolean not null default false;
+
+alter table requests add column if not exists power_mw double precision not null default 10;
+alter table requests add column if not exists flag_reason text;

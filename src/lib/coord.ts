@@ -15,6 +15,7 @@ export type CoordItem = {
   priority: number;
   locked: boolean;
   assigned: number | null;
+  powerMw?: number;
   /** MHz. Narrowband UHF radio mics use 0.005. */
   tuneStep?: number | null;
   gaps?: { min: number; max: number }[];
@@ -44,6 +45,7 @@ type Foot = {
   isolated: boolean;
   t0: number | null;
   t1: number | null;
+  powerMw?: number;
 };
 
 const GUARD: Record<Spacing, number> = {
@@ -149,6 +151,7 @@ function footprint(item: CoordItem, center: number): Foot {
       isolated: item.isolated,
       t0: item.t0,
       t1: item.t1,
+      powerMw: item.powerMw ?? 10,
     };
   }
   const half = Math.max(item.bandwidth, 0.0125) / 2;
@@ -162,6 +165,7 @@ function footprint(item: CoordItem, center: number): Foot {
     isolated: item.isolated,
     t0: item.t0,
     t1: item.t1,
+    powerMw: item.powerMw ?? 10,
   };
 }
 
@@ -240,7 +244,9 @@ function legal(
     const carriers = placed
       .filter((p) => p.mode === "carrier" && together(foot, p))
       .map((p) => p.center);
-    if (imdHit(center, carriers, IMD[spacing])) return false;
+    const loud = Math.max(item.powerMw ?? 10, ...placed.filter((p) => p.mode === "carrier").map((p) => p.powerMw ?? 10));
+    const guard = IMD[spacing] * (1 + Math.max(0, (10 * Math.log10(Math.max(1, loud) / 10)) * 3) / 30);
+    if (imdHit(center, carriers, guard)) return false;
   }
   return true;
 }
@@ -481,18 +487,42 @@ export type IntermodHit = {
   product: number;
   formula: string;
   hits: string;
+  severity: "fail" | "warn" | "note";
+  guardMhz: number;
+  powerMw: number;
 };
 
-/** 2nd, 3rd and 5th order products that land on an assigned carrier. */
+function guardFor(mw: number, order: 2 | 3 | 5): number {
+  const power = Math.max(1, mw);
+  const db = 10 * Math.log10(power / 10);
+  const scale = order === 2 ? 2 : order === 5 ? 5 : 3;
+  const extra = Math.max(0, (db * scale) / 30);
+  return Math.round(0.25 * (1 + extra) * 1000) / 1000;
+}
+
+function severityFor(order: 2 | 3 | 5, mw: number): "fail" | "warn" | "note" {
+  if (order === 3 && mw >= 50) return "fail";
+  if (order === 3 && mw >= 20) return "warn";
+  if (order === 2 && mw >= 20) return "warn";
+  if (order === 5 && mw >= 50) return "warn";
+  return "note";
+}
+
+/** 2nd, 3rd and 5th order products that land on an assigned carrier. Guard widens with power. */
 export function intermodHits(
-  carriers: { id: string; label: string; mhz: number }[],
-  window = 0.2,
+  carriers: { id: string; label: string; mhz: number; powerMw?: number }[],
 ): IntermodHit[] {
   const hits: IntermodHit[] = [];
   const seen = new Set<string>();
-  const near = (product: number) =>
+  const near = (product: number, window: number) =>
     carriers.filter((c) => Math.abs(c.mhz - product) <= window);
-  const push = (order: 2 | 3 | 5, product: number, formula: string, landed: { label: string }[]) => {
+  const push = (
+    order: 2 | 3 | 5,
+    product: number,
+    formula: string,
+    landed: { label: string }[],
+    powerMw: number,
+  ) => {
     if (landed.length === 0 || !Number.isFinite(product) || product < 30 || product > 8000) return;
     const key = `${order}:${formula}:${landed.map((l) => l.label).join(",")}`;
     if (seen.has(key)) return;
@@ -502,6 +532,9 @@ export function intermodHits(
       product: Math.round(product * 1000) / 1000,
       formula,
       hits: landed.map((l) => l.label).join(", "),
+      severity: severityFor(order, powerMw),
+      guardMhz: guardFor(powerMw, order),
+      powerMw,
     });
   };
   const n = carriers.length;
@@ -510,12 +543,13 @@ export function intermodHits(
       if (i === j) continue;
       const a = carriers[i]!;
       const b = carriers[j]!;
-      push(2, a.mhz + b.mhz, `${a.label}+${b.label}`, near(a.mhz + b.mhz));
-      push(2, Math.abs(a.mhz - b.mhz), `|${a.label}-${b.label}|`, near(Math.abs(a.mhz - b.mhz)));
+      const loud = Math.max(a.powerMw ?? 10, b.powerMw ?? 10);
+      push(2, a.mhz + b.mhz, `${a.label}+${b.label}`, near(a.mhz + b.mhz, guardFor(loud, 2)), loud);
+      push(2, Math.abs(a.mhz - b.mhz), `|${a.label}-${b.label}|`, near(Math.abs(a.mhz - b.mhz), guardFor(loud, 2)), loud);
       const third = 2 * a.mhz - b.mhz;
-      push(3, third, `2${a.label}-${b.label}`, near(third).filter((c) => c.id !== a.id && c.id !== b.id));
+      push(3, third, `2${a.label}-${b.label}`, near(third, guardFor(loud, 3)).filter((c) => c.id !== a.id && c.id !== b.id), loud);
       const fifth = 3 * a.mhz - 2 * b.mhz;
-      push(5, fifth, `3${a.label}-2${b.label}`, near(fifth).filter((c) => c.id !== a.id && c.id !== b.id));
+      push(5, fifth, `3${a.label}-2${b.label}`, near(fifth, guardFor(loud, 5)).filter((c) => c.id !== a.id && c.id !== b.id), loud);
     }
   }
   for (let i = 0; i < n; i++) {
@@ -527,7 +561,8 @@ export function intermodHits(
         const b = carriers[j]!;
         const c = carriers[k]!;
         const p = a.mhz + b.mhz - c.mhz;
-        push(3, p, `${a.label}+${b.label}-${c.label}`, near(p).filter((x) => x.id !== a.id && x.id !== b.id && x.id !== c.id));
+        const loud = Math.max(a.powerMw ?? 10, b.powerMw ?? 10, c.powerMw ?? 10);
+        push(3, p, `${a.label}+${b.label}-${c.label}`, near(p, guardFor(loud, 3)).filter((x) => x.id !== a.id && x.id !== b.id && x.id !== c.id), loud);
       }
     }
   }

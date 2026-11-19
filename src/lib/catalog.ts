@@ -25,6 +25,43 @@ export type CatalogDevice = {
   gaps?: { min: number; max: number }[];
 };
 
+
+/** Powers a device can actually be set to, in mW. */
+export function powerOptions(power: string): number[] {
+  const nums = power.split("/").map((part) => Number(part.trim())).filter((n) => Number.isFinite(n) && n > 0);
+  return nums.length > 0 ? nums : [10];
+}
+
+/** Default operating power. 10 mW when the device has it, otherwise the middle option. */
+export function defaultPower(power: string): number {
+  const options = powerOptions(power);
+  if (options.includes(10)) return 10;
+  return options[Math.floor(options.length / 2)] ?? 10;
+}
+
+/**
+ * Guard around an intermod product, in MHz.
+ * 250 kHz at 10 mW. Wider as the louder tone rises, because a 3rd order product
+ * grows about 3 dB for every 1 dB of carrier power.
+ */
+export function imdGuardMhz(mw: number, order: 2 | 3 | 5 = 3): number {
+  const power = Math.max(1, mw);
+  const db = 10 * Math.log10(power / 10);
+  const scale = order === 2 ? 2 : order === 5 ? 5 : 3;
+  const extra = Math.max(0, (db * scale) / 30);
+  return Math.round((0.25 * (1 + extra)) * 1000) / 1000;
+}
+
+export function imdSeverity(order: 2 | 3 | 5, mw: number): "fail" | "warn" | "note" {
+  const guard = imdGuardMhz(mw, order);
+  if (order === 3 && mw >= 50) return "fail";
+  if (order === 3 && mw >= 20) return "warn";
+  if (order === 2 && mw >= 20) return "warn";
+  if (order === 5 && mw >= 50) return "warn";
+  if (guard >= 0.45) return "warn";
+  return "note";
+}
+
 export type Blocker = { min: number; max: number; label: string };
 
 export const CATEGORIES: { id: Category; label: string; hint: string }[] = [

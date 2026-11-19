@@ -11,6 +11,8 @@ import {
   SPACINGS,
   categoryLabel,
   formatMhz,
+  defaultPower,
+  powerOptions,
   type Category,
   type Priority,
   type Spacing,
@@ -396,6 +398,7 @@ function Plot({
             {data.intermods.map((hit) => (
               <li key={`${hit.order}-${hit.formula}`}>
                 <span className="font-mono text-primary">{hit.order}</span> {hit.formula} → {formatMhz(hit.product)} hits {hit.hits}
+                <span className="ml-2 text-xs uppercase">{hit.severity} · {hit.powerMw} mW · ±{hit.guardMhz} MHz</span>
               </li>
             ))}
           </ul>
@@ -442,28 +445,31 @@ function MyRequests({
   const [band, setBand] = useState(bands[0]?.key ?? "");
   const [label, setLabel] = useState("");
   const [spare, setSpare] = useState(false);
+  const [qty, setQty] = useState(1);
+  const [power, setPower] = useState(10);
   const [lines, setLines] = useState<{ label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string }[]>([]);
   const device = bands.find((d) => d.key === band) ?? bands[0];
 
   function addLine() {
     if (!device || !label.trim()) return;
-    setLines((cur) => [
-      ...cur,
-      {
-        label: label.trim(),
-        spare,
-        deviceKey: device.key,
-        deviceName: device.name,
-        manufacturer: device.manufacturer,
-        bandMin: device.bandMin,
-        bandMax: device.bandMax,
-        bandwidth: device.bandwidth,
-        mode: device.mode === "band" ? "band" as const : "carrier" as const,
-        category: device.category,
-      },
-    ]);
+    const count = Math.max(1, Math.min(8, qty));
+    const made = Array.from({ length: count }, (_, i) => ({
+      label: count === 1 ? label.trim() : `${label.trim()} ${i + 1}`,
+      spare,
+      deviceKey: device.key,
+      deviceName: device.name,
+      manufacturer: device.manufacturer,
+      bandMin: device.bandMin,
+      bandMax: device.bandMax,
+      bandwidth: device.bandwidth,
+      mode: device.mode === "band" ? "band" as const : "carrier" as const,
+      category: device.category,
+      powerMw: power,
+    }));
+    setLines((cur) => [...cur, ...made]);
     setLabel("");
     setSpare(false);
+    setQty(1);
   }
 
   if (!canRequest) return <p className="text-sm text-muted">Viewers can read the plot but not submit requests.</p>;
@@ -492,7 +498,7 @@ function MyRequests({
             </select>
           </label>
           <label className="text-sm">Band
-            <select className={fieldClass + " mt-1"} value={band} onChange={(e) => setBand(e.target.value)}>
+            <select className={fieldClass + " mt-1"} value={band} onChange={(e) => { setBand(e.target.value); const next = devices.find((d) => d.key === e.target.value); if (next) setPower(defaultPower(next.power)); }}>
               {bands.map((d) => <option key={d.key} value={d.key}>{d.band || d.name}</option>)}
             </select>
           </label>
@@ -500,9 +506,19 @@ function MyRequests({
             <input className={fieldClass + " mt-1"} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Lead vocal" />
           </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={spare} onChange={(e) => setSpare(e.target.checked)} /> Spare
-        </label>
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={spare} onChange={(e) => setSpare(e.target.checked)} /> Spare
+          </label>
+          <label>Qty
+            <input className={fieldClass + " ml-2 w-16"} type="number" min={1} max={8} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} />
+          </label>
+          <label>Power
+            <select className={fieldClass + " ml-2"} value={power} onChange={(e) => setPower(Number(e.target.value))}>
+              {(device ? powerOptions(device.power) : [10]).map((mw) => <option key={mw} value={mw}>{mw} mW</option>)}
+            </select>
+          </label>
+        </div>
         <div className="mt-3 flex gap-2">
           <button type="button" className={ghostClass} onClick={addLine}>Add line</button>
           <button
@@ -532,8 +548,14 @@ function MyRequests({
           </ul>
         )}
       </div>
-      <div className="space-y-2">
-        {data.batches.filter((b) => data.requests.some((r) => r.batch_id === b.id)).map((b) => (
+      <div className="space-y-3">
+        {data.zones.map((zone) => {
+          const batches = data.batches.filter((b) => b.zone_id === zone.id && data.requests.some((r) => r.batch_id === b.id));
+          if (batches.length === 0) return null;
+          return (
+            <div key={zone.id}>
+              <h3 className="text-sm font-medium">{zone.name}</h3>
+              {batches.map((b) => (
           <div key={b.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="font-medium">{b.title}</span>
@@ -545,7 +567,10 @@ function MyRequests({
               ))}
             </ul>
           </div>
-        ))}
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

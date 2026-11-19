@@ -101,6 +101,7 @@ type RequestRow = {
   tuned_at: string | null;
   tuned_by: string | null;
   spare: boolean;
+  power_mw: number;
 };
 type ScanRow = {
   id: string;
@@ -181,6 +182,7 @@ function toItems(requests: RequestRow[], zones: ZoneRow[]): CoordItem[] {
       assigned: r.assigned_mhz,
       tuneStep: preset?.tuneStep,
       gaps: preset?.gaps,
+      powerMw: r.power_mw == null ? 10 : num(r.power_mw),
     };
   });
 }
@@ -285,7 +287,7 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     intermods: intermodHits(
       requestsClean
         .filter((r) => r.assigned_mhz != null)
-        .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number })),
+        .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number, powerMw: r.power_mw == null ? 10 : num(r.power_mw) })),
     ),
     antennas: antennas.map((a) => ({
       id: a.id,
@@ -1021,6 +1023,7 @@ const batchLine = z.object({
   category: z.string().min(1),
   spare: z.boolean().optional().default(false),
   notes: z.string().trim().max(500).optional().default(""),
+  powerMw: z.number().positive().max(250).optional().default(10),
 });
 
 export const submitBatch = createServerFn({ method: "POST" })
@@ -1046,11 +1049,11 @@ export const submitBatch = createServerFn({ method: "POST" })
       await sql`
         insert into requests (
           id, event_id, zone_id, created_by, category, label, device_key, device_name,
-          manufacturer, band_min, band_max, bandwidth, mode, notes, batch_id, spare
+          manufacturer, band_min, band_max, bandwidth, mode, notes, batch_id, spare, power_mw
         ) values (
           ${uid()}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${line.category}, ${line.label},
           ${line.deviceKey}, ${line.deviceName}, ${line.manufacturer ?? ""}, ${line.bandMin}, ${line.bandMax},
-          ${line.bandwidth}, ${line.mode}, ${line.notes ?? ""}, ${batchId}, ${line.spare ?? false}
+          ${line.bandwidth}, ${line.mode}, ${line.notes ?? ""}, ${batchId}, ${line.spare ?? false}, ${line.powerMw ?? 10}
         )
       `;
     }
