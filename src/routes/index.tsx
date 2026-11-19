@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
+import { Landing } from "@/components/landing";
 import { REGIONS, SPACINGS } from "@/lib/catalog";
 import { createEvent, createSample, joinEvent, listEvents } from "@/lib/pulse.functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -10,6 +11,15 @@ export const Route = createFileRoute("/")({ component: Home });
 type Row = Awaited<ReturnType<typeof listEvents>>[number];
 
 function Home() {
+  const { user, isPending } = useCurrentUserState();
+  if (isPending) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg text-muted">
+        <p className="text-sm">Checking your session…</p>
+      </div>
+    );
+  }
+  if (!user) return <Landing />;
   return (
     <AppShell>
       <Dashboard />

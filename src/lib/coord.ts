@@ -448,20 +448,30 @@ export function audit(
   return issues.slice(0, 60);
 }
 
+function toMhz(raw: number): number {
+  if (!Number.isFinite(raw)) return NaN;
+  // WWB/WSM sometimes export Hz. A radio-mic scan above 20,000 is almost certainly Hz.
+  if (raw > 20000) return raw / 1_000_000;
+  if (raw > 2000) return raw / 1000;
+  return raw;
+}
+
 export function parseScan(body: string, threshold: number): BandBlock[] {
   const blocks: BandBlock[] = [];
   for (const line of body.split(/\r?\n/)) {
     const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    if (/^freq/i.test(t)) continue;
-    const parts = t.split(/[,;\t ]+/).filter(Boolean);
-    const mhz = Number(parts[0]);
-    if (!Number.isFinite(mhz)) continue;
-    const level = parts.length > 1 ? Number(parts[1]) : null;
-    if (level != null && Number.isFinite(level) && level < threshold) continue;
-    const width = parts.length > 2 ? Number(parts[2]) : 0.2;
-    const w = Number.isFinite(width) && width > 0 ? width : 0.2;
-    blocks.push({ min: mhz - w / 2, max: mhz + w / 2, label: "Scan" });
+    if (!t || t.startsWith("#") || t.startsWith("//")) continue;
+    if (/^(freq|frequency|mhz|channel|index)/i.test(t)) continue;
+    const parts = t.split(/[,;\t]+/).map((p) => p.trim()).filter(Boolean);
+    const flat = parts.length > 1 ? parts : t.split(/\s+/).filter(Boolean);
+    const nums = flat.map((p) => Number(p.replace(/[^0-9.+-]/g, ""))).filter((n) => Number.isFinite(n));
+    if (nums.length === 0) continue;
+    const mhz = toMhz(nums[0]!);
+    if (!Number.isFinite(mhz) || mhz < 20 || mhz > 8000) continue;
+    const level = nums.length > 1 ? nums[1]! : null;
+    if (level != null && level < threshold) continue;
+    const width = nums.length > 2 && nums[2]! > 0 && nums[2]! < 20 ? nums[2]! : 0.2;
+    blocks.push({ min: mhz - width / 2, max: mhz + width / 2, label: "Scan" });
   }
   return blocks;
 }

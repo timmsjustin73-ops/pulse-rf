@@ -18,7 +18,7 @@ GitHub also publishes `ghcr.io/timmsjustin73-ops/pulse-rf:latest`. That package 
 
 Open http://localhost:8080 and create an account with email and password.
 
-Google and X sign-in are for the hosted preview. On this Docker install, use email and password.
+Sign in with email and password.
 
 Plots are stored in a Docker volume. They stay when you restart the container.
 
@@ -44,12 +44,16 @@ Email and password sign-in works locally. If `DATABASE_URL` is set (Postgres), t
 
 ## What you can do
 
-- Events, zones and a join code (manager, contributor, viewer)
-- Device library, including Australian Shure ranges (SLX-D H57, SLX-D+ H58, BLX K14 and M17, Axient Digital G57 / H54 / G55) plus 2.4 GHz and 5.8 GHz
-- Auto assignment: Resilience, Balanced or Density
+- Events, zones and a join code (manager, contributor, viewer). Managers can change roles.
+- Public plot link for a venue or client
+- Device library across Shure, Sennheiser, Lectrosonics, Sony, Audio-Technica, Wisycom and more, including IEM bands, plus lighting and video hops
+- Spectrum chart of the assigned plot, with scan hits marked
+- Auto assignment: Resilience, Balanced or Density, with undo of the last coordinate
 - Manual lock. Narrowband radio mics snap to 0.005 MHz steps, so 470.387 becomes 470.385 or 470.390
 - For Australia, those radio mics are kept inside 520–694 MHz
-- Scan CSV import, example TV keep-outs, conflict list
-- CSV export and print
+- Scan import from paste or a CSV/TXT file (plain, Shure WWB, Sennheiser WSM style)
+- Conflict panel that says why a carrier failed
+- CSV, Excel, and print/PDF export
+- Antenna coverage estimate from power, gain, frequency, height and margin
 
 Frequencies below 520 MHz appear on some hardware ranges but sit outside the general Australian LIPD wireless-audio window. Check the venue and the current rules before transmitting.

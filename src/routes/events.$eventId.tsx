@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
+import { SpectrumChart } from "@/components/spectrum";
+import { CoverageMap, rangeMetres } from "@/components/coverage";
 import {
   CATALOG,
   CATEGORIES,
@@ -24,6 +26,11 @@ import {
   getEvent,
   listCustomDevices,
   recalculate,
+  setMemberRole,
+  enableShare,
+  addAntenna,
+  deleteAntenna,
+  undoCoordinate,
   updateEvent,
   updateRequest,
 } from "@/lib/pulse.functions";
@@ -32,7 +39,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 export const Route = createFileRoute("/events/$eventId")({ component: EventRoute });
 
 type Bundle = Awaited<ReturnType<typeof getEvent>>;
-type Tab = "plot" | "request" | "zones" | "scans" | "settings" | "sheet";
+type Tab = "plot" | "request" | "zones" | "scans" | "antennas" | "settings" | "sheet";
 
 function EventRoute() {
   return (
@@ -123,14 +130,24 @@ function EventScreen() {
             Copy code
           </button>
           {manager && (
-            <button
-              type="button"
-              className={btnClass}
-              disabled={busy !== ""}
-              onClick={() => run("calc", () => recalculate({ data: { eventId } }))}
-            >
-              {busy === "calc" ? "Coordinating…" : "Coordinate"}
-            </button>
+            <>
+              <button
+                type="button"
+                className={ghostClass}
+                disabled={busy !== ""}
+                onClick={() => run("undo", () => undoCoordinate({ data: { eventId } }))}
+              >
+                {busy === "undo" ? "Restoring…" : "Undo"}
+              </button>
+              <button
+                type="button"
+                className={btnClass}
+                disabled={busy !== ""}
+                onClick={() => run("calc", () => recalculate({ data: { eventId } }))}
+              >
+                {busy === "calc" ? "Coordinating…" : "Coordinate"}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -147,6 +164,7 @@ function EventScreen() {
             ["request", "Request"],
             ["zones", "Zones"],
             ["scans", "Scans"],
+            ["antennas", "Antennas"],
             ["settings", "Settings"],
             ["sheet", "Sheet"],
           ] as const
@@ -170,6 +188,7 @@ function EventScreen() {
       )}
       {tab === "zones" && <Zones data={data} manager={manager} busy={busy} run={run} />}
       {tab === "scans" && <Scans data={data} canRequest={canRequest} manager={manager} busy={busy} run={run} />}
+      {tab === "antennas" && <Antennas data={data} manager={manager} busy={busy} run={run} />}
       {tab === "settings" && <Settings data={data} manager={manager} busy={busy} run={run} />}
       {tab === "sheet" && <Sheet data={data} />}
     </div>
@@ -197,8 +216,25 @@ function Plot({
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
   const strips = useMemo(() => bands(data), [data]);
+  const carriers = data.requests
+    .filter((r) => r.assigned_mhz != null)
+    .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number, category: r.category }));
+  const marks = data.scans.flatMap((s) => s.marks);
+  const lo = Math.min(
+    470,
+    ...carriers.map((c) => c.mhz),
+    ...data.requests.map((r) => r.band_min),
+  );
+  const hi = Math.max(
+    694,
+    ...carriers.map((c) => c.mhz),
+    ...data.requests.map((r) => r.band_max),
+  );
   return (
     <div className="space-y-4">
+      {carriers.length > 0 && (
+        <SpectrumChart carriers={carriers} marks={marks} min={Math.floor(lo)} max={Math.ceil(hi)} />
+      )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
         <p className="text-sm text-muted">
           Radio mics only land on 0.005 MHz steps. 470.387 is not tuneable — it has to be 470.385 or 470.390.
@@ -232,13 +268,16 @@ function Plot({
         )}
       </div>
       {data.issues.length > 0 && (
-        <ul className="space-y-2">
-          {data.issues.slice(0, 8).map((issue, i) => (
-            <li key={i} className={"text-sm " + (issue.severity === "bad" ? "text-bad" : "text-muted")}>
-              {labelFor(data, issue.ids)} — {issue.message}
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-xl border border-bad/40 bg-bad/5 p-4">
+          <h2 className="font-semibold">Why this plot is not clean</h2>
+          <ul className="mt-2 space-y-2">
+            {data.issues.map((issue, i) => (
+              <li key={i} className={"text-sm " + (issue.severity === "bad" ? "text-bad" : "text-muted")}>
+                <span className="font-medium">{labelFor(data, issue.ids)}</span> — {issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[640px] text-left text-sm">
@@ -348,11 +387,14 @@ function RequestForm({
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
   const [category, setCategory] = useState<Category>("audio");
-  const devices = [
-    ...CATALOG.filter((d) => d.category === category).map((d) => ({ key: d.key, name: `${d.manufacturer} ${d.name}` })),
-    ...custom.filter((d) => d.category === category).map((d) => ({ key: `custom:${d.id}`, name: d.name })),
-  ];
-  const [deviceKey, setDeviceKey] = useState(devices[0]?.key ?? "");
+  const catalog = CATALOG.filter((d) => d.category === category);
+  const manufacturers = [...new Set(catalog.map((d) => d.manufacturer))].sort();
+  const [manufacturer, setManufacturer] = useState(manufacturers[0] ?? "");
+  const seriesList = [...new Set(catalog.filter((d) => d.manufacturer === manufacturer).map((d) => d.series))].sort();
+  const [series, setSeries] = useState(seriesList[0] ?? "");
+  const bandDevices = catalog.filter((d) => d.manufacturer === manufacturer && d.series === series);
+  const customDevices = custom.filter((d) => d.category === category);
+  const [deviceKey, setDeviceKey] = useState(bandDevices[0]?.key ?? "");
   const [label, setLabel] = useState("");
   const [zoneId, setZoneId] = useState(data.zones[0]?.id ?? "");
   const [priority, setPriority] = useState<Priority>("normal");
@@ -362,10 +404,19 @@ function RequestForm({
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    setDeviceKey(devices[0]?.key ?? "");
-    // devices derived from category
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, custom.length]);
+    const mfrs = [...new Set(CATALOG.filter((d) => d.category === category).map((d) => d.manufacturer))].sort();
+    setManufacturer(mfrs[0] ?? "");
+  }, [category]);
+
+  useEffect(() => {
+    const seriesOpts = [...new Set(CATALOG.filter((d) => d.category === category && d.manufacturer === manufacturer).map((d) => d.series))].sort();
+    setSeries(seriesOpts[0] ?? "");
+  }, [category, manufacturer]);
+
+  useEffect(() => {
+    const bands = CATALOG.filter((d) => d.category === category && d.manufacturer === manufacturer && d.series === series);
+    setDeviceKey(bands[0]?.key ?? "");
+  }, [category, manufacturer, series]);
 
   if (!canRequest) return <p className="text-sm text-muted">Viewers can read the plot but not request channels.</p>;
 
@@ -406,10 +457,29 @@ function RequestForm({
         </select>
       </label>
       <label className="text-sm">
-        <span className="mb-1 block text-muted">Device</span>
+        <span className="mb-1 block text-muted">Manufacturer</span>
+        <select className={fieldClass} value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} required>
+          {manufacturers.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="mb-1 block text-muted">Make</span>
+        <select className={fieldClass} value={series} onChange={(e) => setSeries(e.target.value)} required>
+          {seriesList.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm sm:col-span-2">
+        <span className="mb-1 block text-muted">Band</span>
         <select className={fieldClass} value={deviceKey} onChange={(e) => setDeviceKey(e.target.value)} required>
-          {devices.map((d) => (
-            <option key={d.key} value={d.key}>{d.name}</option>
+          {bandDevices.map((d) => (
+            <option key={d.key} value={d.key}>{d.band} · {d.bandMin}–{d.bandMax} MHz</option>
+          ))}
+          {customDevices.map((d) => (
+            <option key={`custom:${d.id}`} value={`custom:${d.id}`}>{d.name} (custom)</option>
           ))}
         </select>
       </label>
@@ -573,10 +643,21 @@ function Scans({
           }}
         >
           <input className={fieldClass} value={label} onChange={(e) => setLabel(e.target.value)} required />
+          <input
+            type="file"
+            accept=".csv,.txt,.tsv"
+            className="text-sm text-muted"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              void file.text().then((t) => setBody(t));
+            }}
+          />
           <textarea
             className={fieldClass + " h-36 py-2 font-mono"}
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            placeholder={"520.000,-62\n548.250,-55\n\nAlso accepts Shure WWB and Sennheiser WSM exports."}
             required
           />
           <label className="block text-sm">
@@ -749,18 +830,67 @@ function Settings({
           </button>
         )}
       </div>
-      <ul className="text-sm text-muted">
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium">Members</h3>
         {data.members.map((m) => (
-          <li key={m.user_id}>
-            {m.name ?? m.email ?? "Member"} · {m.role}
-          </li>
+          <div key={m.user_id} className="flex items-center gap-3 text-sm">
+            <span className="min-w-0 flex-1">{m.name ?? m.email ?? "Member"}</span>
+            {manager ? (
+              <select
+                className={fieldClass + " max-w-40"}
+                value={m.role}
+                onChange={(e) =>
+                  void run("role", () =>
+                    setMemberRole({
+                      data: {
+                        eventId: data.event.id,
+                        userId: m.user_id,
+                        role: e.target.value as "manager" | "contributor" | "viewer",
+                      },
+                    }),
+                  )
+                }
+              >
+                <option value="manager">manager</option>
+                <option value="contributor">contributor</option>
+                <option value="viewer">viewer</option>
+              </select>
+            ) : (
+              <span className="text-muted">{m.role}</span>
+            )}
+          </div>
         ))}
-      </ul>
+      </div>
+      {manager && <ShareLink eventId={data.event.id} />}
     </form>
   );
 }
 
 function Sheet({ data }: { data: Bundle }) {
+  function downloadExcel() {
+    const rows = [
+      ["Channel", "Device", "Category", "Zone", "MHz", "Locked"],
+      ...data.requests.map((r) => [
+        r.label,
+        r.device_name,
+        r.category,
+        data.zones.find((z) => z.id === r.zone_id)?.name ?? "",
+        r.assigned_mhz ?? "",
+        r.locked ? "yes" : "no",
+      ]),
+    ];
+    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Plot"><Table>${rows
+      .map((row) => `<Row>${row.map((c) => `<Cell><Data ss:Type="String">${String(c).replaceAll("&", "&").replaceAll("<", "<")}</Data></Cell>`).join("")}</Row>`)
+      .join("")}</Table></Worksheet></Workbook>`;
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.event.name.replaceAll(/\s+/g, "-").toLowerCase()}-plot.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function download() {
     const header = ["Category", "Label", "Device", "Zone", "Priority", "From", "Until", "MHz", "Locked"];
     const lines = data.requests.map((r) =>
@@ -791,7 +921,8 @@ function Sheet({ data }: { data: Bundle }) {
     <div className="space-y-4">
       <div className="no-print flex flex-wrap gap-2">
         <button type="button" className={btnClass} onClick={download}>Download CSV</button>
-        <button type="button" className={ghostClass} onClick={() => window.print()}>Print sheet</button>
+        <button type="button" className={ghostClass} onClick={downloadExcel}>Download Excel</button>
+        <button type="button" className={ghostClass} onClick={() => window.print()}>Print / PDF</button>
       </div>
       <div>
         <h2 className="text-xl font-semibold">{data.event.name}</h2>
@@ -821,6 +952,111 @@ function Sheet({ data }: { data: Bundle }) {
         </tbody>
       </table>
       <p className="text-xs text-muted">Planning aid only. Confirm the plot against a scan and the local licence before the show.</p>
+    </div>
+  );
+}
+
+function Antennas({
+  data,
+  manager,
+  busy,
+  run,
+}: {
+  data: Bundle;
+  manager: boolean;
+  busy: string;
+  run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
+}) {
+  const [name, setName] = useState("Main RX");
+  const [power, setPower] = useState("50");
+  const [gain, setGain] = useState("2");
+  const [freq, setFreq] = useState("550");
+  const [height, setHeight] = useState("4");
+  const [threshold, setThreshold] = useState("-90");
+  const [margin, setMargin] = useState("10");
+  return (
+    <div className="space-y-4">
+      <CoverageMap antennas={data.antennas} />
+      <ul className="space-y-2">
+        {data.antennas.map((a) => (
+          <li key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">{a.name}</span>
+              <span className="text-sm text-muted">
+                {a.powerMw} mW · {a.gainDbi} dBi · {a.freqMhz} MHz · {a.heightM} m
+              </span>
+            </span>
+            <span className="font-mono text-sm text-primary">{Math.round(rangeMetres(a))} m</span>
+            {manager && (
+              <button
+                type="button"
+                className="text-sm text-bad"
+                onClick={() => run("ant", () => deleteAntenna({ data: { eventId: data.event.id, antennaId: a.id } }))}
+              >
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {manager && (
+        <form
+          className="grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run("ant", () =>
+              addAntenna({
+                data: {
+                  eventId: data.event.id,
+                  name,
+                  powerMw: Number(power),
+                  gainDbi: Number(gain),
+                  freqMhz: Number(freq),
+                  heightM: Number(height),
+                  thresholdDbm: Number(threshold),
+                  marginDb: Number(margin),
+                },
+              }),
+            );
+          }}
+        >
+          <label className="text-sm">Name<input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} required /></label>
+          <label className="text-sm">Power mW<input className={fieldClass} value={power} onChange={(e) => setPower(e.target.value)} required /></label>
+          <label className="text-sm">Gain dBi<input className={fieldClass} value={gain} onChange={(e) => setGain(e.target.value)} required /></label>
+          <label className="text-sm">Frequency MHz<input className={fieldClass} value={freq} onChange={(e) => setFreq(e.target.value)} required /></label>
+          <label className="text-sm">Height m<input className={fieldClass} value={height} onChange={(e) => setHeight(e.target.value)} required /></label>
+          <label className="text-sm">RX threshold dBm<input className={fieldClass} value={threshold} onChange={(e) => setThreshold(e.target.value)} required /></label>
+          <label className="text-sm">Margin dB<input className={fieldClass} value={margin} onChange={(e) => setMargin(e.target.value)} required /></label>
+          <button className={btnClass} type="submit" disabled={busy !== ""}>Add antenna</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function ShareLink({ eventId }: { eventId: string }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 p-3">
+      <p className="text-sm font-medium">Public plot link</p>
+      <p className="text-xs text-muted">A venue or client can open the locked plot without an account.</p>
+      <button
+        type="button"
+        className={ghostClass + " mt-2"}
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void enableShare({ data: { eventId } })
+            .then((res) => setUrl(`${window.location.origin}/share/${res.token}`))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Creating…" : "Create link"}
+      </button>
+      {url && (
+        <p className="mt-2 break-all font-mono text-xs text-primary">{url}</p>
+      )}
     </div>
   );
 }

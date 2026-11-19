@@ -1,17 +1,23 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Radio } from "lucide-react";
-import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
+import { authClient, authEnabled } from "@/lib/auth/client";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { btnClass, fieldClass, messageOf } from "@/components/shell";
 
-export const Route = createFileRoute("/login")({ component: Login });
+export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    mode: search.mode === "up" ? "up" : "in",
+  }),
+  component: Login,
+});
 
 function Login() {
   const { user, isPending } = useCurrentUserState();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const { mode: initialMode } = Route.useSearch();
+  const [mode, setMode] = useState<"in" | "up">(initialMode === "up" ? "up" : "in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -112,18 +118,6 @@ function Login() {
                   {mode === "in" ? "Need an account? Create one" : "Already have an account? Sign in"}
                 </button>
               </form>
-              <div className="space-y-2">
-                {GROK_PROVIDERS.map((p) => (
-                  <button
-                    key={p.providerId}
-                    type="button"
-                    className="h-11 w-full rounded-lg border border-border text-sm font-medium"
-                    onClick={() => signIn(p.providerId, { callbackURL: "/" })}
-                  >
-                    Continue with {p.label}
-                  </button>
-                ))}
-              </div>
             </>
           ) : (
             <p className="text-sm text-muted">Sign-in is turned off.</p>

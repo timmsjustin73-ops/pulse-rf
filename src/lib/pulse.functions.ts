@@ -43,6 +43,7 @@ type EventRow = {
   join_role: string;
   blockers: string;
   created_at: string;
+  share_token: string | null;
 };
 
 type ZoneRow = { id: string; event_id: string; name: string; isolated: boolean };
@@ -166,6 +167,10 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     select * from requests where event_id = ${eventId} order by category, label
   `;
   const scans = await sql<ScanRow>`select * from scans where event_id = ${eventId} order by created_at desc`;
+  const antennas = await sql<{
+    id: string; name: string; power_mw: number; gain_dbi: number; freq_mhz: number;
+    height_m: number; threshold_dbm: number; margin_db: number;
+  }>`select id, name, power_mw, gain_dbi, freq_mhz, height_m, threshold_dbm, margin_db from antennas where event_id = ${eventId} order by name`;
   const members = await sql<{ user_id: string; role: string; name: string | null; email: string | null }>`
     select m.user_id, m.role, u.name, u.email
     from event_members m
@@ -211,16 +216,30 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     isOwner: event.owner_id === userId,
     zones: zonesClean,
     requests: requestsClean,
-    scans: scans.map((s) => ({
-      id: s.id,
-      label: s.label,
-      threshold: num(s.threshold),
-      hits: parseScan(s.body, num(s.threshold)).length,
-      created_at: s.created_at,
-    })),
+    scans: scans.map((s) => {
+      const marks = parseScan(s.body, num(s.threshold));
+      return {
+        id: s.id,
+        label: s.label,
+        threshold: num(s.threshold),
+        hits: marks.length,
+        marks: marks.map((m) => ({ min: m.min, max: m.max })),
+        created_at: s.created_at,
+      };
+    }),
     members,
     activity,
     issues,
+    antennas: antennas.map((a) => ({
+      id: a.id,
+      name: a.name,
+      powerMw: num(a.power_mw),
+      gainDbi: num(a.gain_dbi),
+      freqMhz: num(a.freq_mhz),
+      heightM: num(a.height_m),
+      thresholdDbm: num(a.threshold_dbm),
+      marginDb: num(a.margin_db),
+    })),
   };
 }
 
@@ -473,6 +492,8 @@ export const addRequests = createServerFn({ method: "POST" })
           key: data.deviceKey,
           category: data.category,
           manufacturer: row.manufacturer,
+          series: "Custom",
+          band: "Custom",
           name: row.name,
           bandMin: row.band_min,
           bandMax: row.band_max,
@@ -584,8 +605,26 @@ export const deleteRequest = createServerFn({ method: "POST" })
     return loadBundle(sql, data.eventId, context.userId);
   });
 
+async function snapshotAssignments(sql: Sql, eventId: string) {
+  const rows = await sql<{ id: string; assigned_mhz: number | null; locked: boolean }>`
+    select id, assigned_mhz, locked from requests where event_id = ${eventId}
+  `;
+  await sql`
+    insert into assignment_snapshots (id, event_id, payload)
+    values (${uid()}, ${eventId}, ${JSON.stringify(rows)})
+  `;
+  await sql`
+    delete from assignment_snapshots
+    where event_id = ${eventId}
+      and id not in (
+        select id from assignment_snapshots where event_id = ${eventId} order by created_at desc limit 8
+      )
+  `;
+}
+
 async function runCalc(sql: Sql, eventId: string, userId: string) {
   await requireAccess(sql, eventId, userId, "manager");
+  await snapshotAssignments(sql, eventId);
   const events = await sql<EventRow>`select * from events where id = ${eventId}`;
   const event = events[0];
   if (!event) throw new Error("Event not found.");
@@ -769,4 +808,133 @@ export const createSample = createServerFn({ method: "POST" })
     `;
     await runCalc(sql, id, context.userId);
     return { id };
+  });
+
+export const undoCoordinate = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const snaps = await sql<{ id: string; payload: string }>`
+      select id, payload from assignment_snapshots
+      where event_id = ${data.eventId}
+      order by created_at desc
+      limit 1
+    `;
+    const snap = snaps[0];
+    if (!snap) throw new Error("Nothing to undo yet. Coordinate once first.");
+    const rows = JSON.parse(snap.payload) as { id: string; assigned_mhz: number | null; locked: boolean }[];
+    for (const row of rows) {
+      await sql`
+        update requests set assigned_mhz = ${row.assigned_mhz}, locked = ${row.locked}
+        where id = ${row.id} and event_id = ${data.eventId}
+      `;
+    }
+    await sql`delete from assignment_snapshots where id = ${snap.id}`;
+    await logActivity(sql, data.eventId, context.userId, "Restored the previous plot.");
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const setMemberRole = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    userId: z.string().min(1),
+    role: z.enum(["manager", "contributor", "viewer"]),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const events = await sql<{ owner_id: string }>`select owner_id from events where id = ${data.eventId}`;
+    if (events[0]?.owner_id === data.userId && data.role !== "manager") {
+      throw new Error("The owner stays a manager.");
+    }
+    await sql`
+      update event_members set role = ${data.role}
+      where event_id = ${data.eventId} and user_id = ${data.userId}
+    `;
+    await logActivity(sql, data.eventId, context.userId, `Set a member to ${data.role}.`);
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const enableShare = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const existing = await sql<{ share_token: string | null }>`select share_token from events where id = ${data.eventId}`;
+    let token = existing[0]?.share_token;
+    if (!token) {
+      token = crypto.randomUUID().replaceAll("-", "");
+      await sql`update events set share_token = ${token} where id = ${data.eventId}`;
+      await logActivity(sql, data.eventId, context.userId, "Opened a public plot link.");
+    }
+    return { token };
+  });
+
+export const getPublicPlot = createServerFn({ method: "GET" })
+  .validator(z.object({ token: z.string().min(8) }))
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    const events = await sql<EventRow>`select * from events where share_token = ${data.token}`;
+    const event = events[0];
+    if (!event) throw new Error("This plot link is not active.");
+    const zones = await sql<ZoneRow>`select * from zones where event_id = ${event.id} order by name`;
+    const requests = await sql<RequestRow>`select * from requests where event_id = ${event.id} order by category, label`;
+    const scans = await sql<ScanRow>`select * from scans where event_id = ${event.id}`;
+    return {
+      name: event.name,
+      venue: event.venue,
+      city: event.city,
+      spacing: event.spacing,
+      zones: zones.map((z) => ({ id: z.id, name: z.name })),
+      requests: requests.map((r) => ({
+        id: r.id,
+        label: r.label,
+        device_name: r.device_name,
+        category: r.category,
+        zone_id: r.zone_id,
+        assigned_mhz: r.assigned_mhz == null ? null : num(r.assigned_mhz),
+        locked: flag(r.locked),
+      })),
+      marks: scans.flatMap((s) => parseScan(s.body, num(s.threshold)).map((m) => ({ min: m.min, max: m.max }))),
+    };
+  });
+
+export const addAntenna = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    name: z.string().trim().min(1).max(80),
+    powerMw: z.number().min(1).max(1000),
+    gainDbi: z.number().min(-10).max(20),
+    freqMhz: z.number().min(30).max(8000),
+    heightM: z.number().min(0.5).max(50),
+    thresholdDbm: z.number().min(-120).max(-40),
+    marginDb: z.number().min(0).max(40),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`
+      insert into antennas (id, event_id, name, power_mw, gain_dbi, freq_mhz, height_m, threshold_dbm, margin_db)
+      values (
+        ${uid()}, ${data.eventId}, ${data.name}, ${data.powerMw}, ${data.gainDbi},
+        ${data.freqMhz}, ${data.heightM}, ${data.thresholdDbm}, ${data.marginDb}
+      )
+    `;
+    await logActivity(sql, data.eventId, context.userId, `Added antenna “${data.name}”.`);
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const deleteAntenna = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), antennaId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`delete from antennas where id = ${data.antennaId} and event_id = ${data.eventId}`;
+    return loadBundle(sql, data.eventId, context.userId);
   });

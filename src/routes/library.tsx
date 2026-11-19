@@ -84,8 +84,8 @@ function Library() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Device library</h1>
         <p className="text-sm text-muted">
-          Australian Shure ranges follow the local band splits. UHF radio mics only tune in 0.005 MHz steps, and an
-          Australia show keeps wireless audio above 520 MHz and below 694 MHz.
+          Catalog is grouped by manufacturer, make and band. UHF radio mics tune in 0.005 MHz steps. Australia shows
+          generally stay above 520 MHz and below 694 MHz.
         </p>
       </div>
       {error && <Banner tone="bad">{error}</Banner>}
@@ -98,11 +98,20 @@ function Library() {
       <ul className="grid gap-3 sm:grid-cols-2">
         {presets.map((d) => (
           <li key={d.key} className="rounded-xl border border-border bg-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-muted">{d.manufacturer} · {d.category}</p>
+            <p className="text-xs uppercase tracking-wide text-muted">{d.manufacturer} · {d.series} · {d.band}</p>
             <p className="font-medium">{d.name}</p>
             <p className="mt-1 font-mono text-sm tabular-nums text-primary">
               {formatMhz(d.bandMin)} – {formatMhz(d.bandMax)} MHz
             </p>
+            <div className="relative mt-2 h-2 rounded-full bg-surface-2">
+              <span
+                className="absolute inset-y-0 rounded-full bg-primary"
+                style={{
+                  left: `${Math.max(0, ((d.bandMin - 470) / 500) * 100)}%`,
+                  width: `${Math.min(100, ((d.bandMax - d.bandMin) / 500) * 100)}%`,
+                }}
+              />
+            </div>
             <p className="text-sm text-muted">
               {d.mode === "band" ? "Reserves the whole band" : `${d.bandwidth} MHz carrier`} · {d.power}
               {d.tuneStep ? ` · ${d.tuneStep} MHz steps` : ""}

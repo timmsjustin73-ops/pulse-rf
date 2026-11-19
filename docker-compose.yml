@@ -19,10 +19,19 @@ services:
     build: .
     ports:
       - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pulserf.rule=Host(`rf.jtlive.tech`)"
+      - "traefik.http.routers.pulserf.entrypoints=websecure"
+      - "traefik.http.routers.pulserf.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pulserf-http.rule=Host(`rf.jtlive.tech`)"
+      - "traefik.http.routers.pulserf-http.entrypoints=web"
+      - "traefik.http.routers.pulserf-http.service=pulserf"
+      - "traefik.http.services.pulserf.loadbalancer.server.port=8080"
     environment:
       DATABASE_URL: postgres://pulse:pulse@db:5432/pulse
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-pulse-rf-local-install-secret-change-me}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8080}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://rf.jtlive.tech}
       HOST: 0.0.0.0
       PORT: "8080"
       NITRO_HOST: 0.0.0.0
