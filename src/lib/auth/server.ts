@@ -115,15 +115,27 @@ const baseURL = explicitBaseURL ?? {
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
 // Missing entries here surface as FORBIDDEN "Invalid origin".
-const trustedOrigins: string[] = explicitBaseURL
-  ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
-  : [
-      // Host wildcards (matched against Origin's host)
-      ...previewAllowedHosts,
-      // Full-origin wildcards (matched against Origin)
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
-      ...LOCAL_DEV_ORIGINS,
-    ];
+// A self-hosted install is opened at whatever host:port the browser uses
+// (for example http://rf.jtlive.tech:8080) even when BETTER_AUTH_URL omitted
+// the port. Trust that request when its Origin host matches the Host header,
+// which is the same-origin check without listing every address in advance.
+const trustedOrigins = (request?: Request): string[] => {
+  const origins = new Set<string>([
+    ...(explicitBaseURL ? [explicitBaseURL] : []),
+    ...LOCAL_DEV_ORIGINS,
+  ]);
+  const originHeader = request?.headers.get("origin");
+  const host = request?.headers.get("host")?.split(",")[0]?.trim();
+  if (originHeader && host) {
+    try {
+      const originUrl = new URL(originHeader);
+      if (originUrl.host === host) origins.add(originUrl.origin);
+    } catch {
+      /* ignore a malformed Origin */
+    }
+  }
+  return [...origins];
+};
 
 const databaseUrl = env("DATABASE_URL");
 
