@@ -49,6 +49,7 @@ import {
   deleteGroup,
   setPlotLock,
   beat,
+  updateBatch,
 } from "@/lib/pulse.functions";
 import QRCode from "qrcode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -75,7 +76,8 @@ function EventScreen() {
   const [busy, setBusy] = useState("");
   const [tab, setTab] = useState<Tab>("coord");
   const [custom, setCustom] = useState<Awaited<ReturnType<typeof listCustomDevices>>>([]);
-  const [people, setPeople] = useState<{ user_id: string; name: string }[]>([]);
+  const [people, setPeople] = useState<{ user_id: string; name: string; editing?: string }[]>([]);
+  const [editingId, setEditingId] = useState("");
   const [qr, setQr] = useState("");
 
   async function reload() {
@@ -85,11 +87,11 @@ function EventScreen() {
 
   useEffect(() => {
     if (!user?.id || !eventId) return;
-    const ping = () => void beat({ data: { eventId } }).then(setPeople).catch(() => undefined);
+    const ping = () => void beat({ data: { eventId, editing: editingId } }).then(setPeople).catch(() => undefined);
     ping();
     const timer = window.setInterval(ping, 8000);
     return () => window.clearInterval(timer);
-  }, [user?.id, eventId]);
+  }, [user?.id, eventId, editingId]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -108,7 +110,7 @@ function EventScreen() {
       .catch(() => undefined);
     const poll = window.setInterval(() => {
       void getEvent({ data: { eventId } }).then((next) => { if (!cancel) setData(next); }).catch(() => undefined);
-    }, 5000);
+    }, 2000);
     return () => {
       cancel = true;
       window.clearInterval(poll);
@@ -202,7 +204,11 @@ function EventScreen() {
         <Stat label="Conflicts" value={String(bad)} warn={bad > 0} />
         <Stat label="Spacing" value={data.event.spacing} />
       </div>
-      {people.length > 1 && <p className="text-xs text-muted">{people.length} people here: {people.map((p) => p.name).join(", ")}</p>}
+      {people.length > 0 && (
+        <p className="text-xs text-muted">
+          {people.map((p) => p.name + (p.editing ? " is editing" : "")).join(", ")}
+        </p>
+      )}
       {qr && <img src={qr} alt="Join QR" className="h-36 w-36 rounded-lg bg-white p-2" />}
       {error && <Banner tone="bad">{error}</Banner>}
       <div className="no-print flex gap-1 overflow-x-auto">
@@ -231,7 +237,7 @@ function EventScreen() {
         ))}
       </div>
       {tab === "coord" && <Coordinate data={visible} manager={manager} busy={busy} run={run} eventId={eventId} />}
-      {tab === "mine" && <MyRequests data={visible} custom={custom} canRequest={canRequest} busy={busy} run={run} />}
+      {tab === "mine" && <MyRequests data={visible} custom={custom} canRequest={canRequest} busy={busy} run={run} onEdit={setEditingId} />}
       {tab === "zones" && <Zones data={data} manager={manager} busy={busy} run={run} />}
       {tab === "scans" && <Scans data={data} canRequest={canRequest} manager={manager} busy={busy} run={run} />}
       {tab === "antennas" && <Antennas data={data} manager={manager} busy={busy} run={run} />}
@@ -571,12 +577,14 @@ function MyRequests({
   canRequest,
   busy,
   run,
+  onEdit,
 }: {
   data: Bundle;
   custom: Awaited<ReturnType<typeof listCustomDevices>>;
   canRequest: boolean;
   busy: string;
   run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
+  onEdit?: (batchId: string) => void;
 }) {
   const devices = useMemo(
     () => CATALOG.map((d) => ({ ...d, bandMin: d.bandMin, bandMax: d.bandMax, mode: d.mode })),
@@ -595,7 +603,8 @@ function MyRequests({
   const [spare, setSpare] = useState(false);
   const [qty, setQty] = useState(1);
   const [power, setPower] = useState(10);
-  const [lines, setLines] = useState<{ label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string }[]>([]);
+  const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number }[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
   const device = bands.find((d) => d.key === band) ?? bands[0];
 
   function addLine() {
@@ -709,18 +718,89 @@ function MyRequests({
           <div key={b.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="font-medium">{b.title}</span>
-              <span className="text-muted">{b.status}</span>
+              <span className="text-muted">{b.status}{b.return_note ? ` · ${b.return_note}` : ""}</span>
             </div>
             <ul className="mt-2 space-y-1 text-muted">
               {data.requests.filter((r) => r.batch_id === b.id).map((r) => (
                 <li key={r.id}>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}</li>
               ))}
             </ul>
+            <div className="mt-2 flex gap-2">
+              <button type="button" className="text-xs underline" onClick={() => { setEditing(b.id); onEdit?.(b.id); }}>Edit</button>
+              <button type="button" className="text-xs underline" onClick={() => { const zone = window.prompt("Area id", data.zones[0]?.id ?? ""); if (zone) void run("copy", () => copyBatch({ data: { eventId: data.event.id, batchId: b.id, zoneId: zone } })); }}>Copy</button>
+            </div>
+            {editing === b.id && (
+              <BatchEditor
+                data={data}
+                batchId={b.id}
+                busy={busy}
+                onClose={() => { setEditing(null); onEdit?.(""); }}
+                run={run}
+              />
+            )}
           </div>
               ))}
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function BatchEditor({
+  data,
+  batchId,
+  busy,
+  onClose,
+  run,
+}: {
+  data: Bundle;
+  batchId: string;
+  busy: string;
+  onClose: () => void;
+  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
+}) {
+  const batch = data.batches.find((b) => b.id === batchId);
+  const existing = data.requests.filter((r) => r.batch_id === batchId);
+  const [title, setTitle] = useState(batch?.title ?? "");
+  const [notes, setNotes] = useState(batch?.notes ?? "");
+  const [lines, setLines] = useState(existing.map((r) => ({
+    id: r.id,
+    label: r.label,
+    deviceKey: r.device_key,
+    deviceName: r.device_name,
+    manufacturer: r.manufacturer,
+    bandMin: r.band_min,
+    bandMax: r.band_max,
+    bandwidth: r.bandwidth,
+    mode: r.mode === "band" ? "band" as const : "carrier" as const,
+    category: r.category,
+    spare: r.spare,
+    notes: r.notes,
+    powerMw: r.power_mw ?? 10,
+  })));
+  if (!batch) return null;
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-border p-3">
+      <input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input className={fieldClass} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" />
+      {lines.map((line, i) => (
+        <div key={line.id ?? i} className="flex gap-2">
+          <input className={fieldClass} value={line.label} onChange={(e) => setLines((cur) => cur.map((l, n) => n === i ? { ...l, label: e.target.value } : l))} />
+          <button type="button" className="text-xs text-bad" onClick={() => setLines((cur) => cur.filter((_, n) => n !== i))}>Remove</button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={btnClass}
+          disabled={busy !== ""}
+          onClick={() => void run("edit", () => updateBatch({ data: { eventId: data.event.id, batchId, title, notes, lines } })).then(onClose)}
+        >
+          Save. Changed lines lose their frequency.
+        </button>
+        <button type="button" className={ghostClass} onClick={onClose}>Cancel</button>
       </div>
     </div>
   );
@@ -1278,10 +1358,21 @@ function Settings({
 }
 
 function Sheet({ data }: { data: Bundle }) {
+  const [area, setArea] = useState("all");
+  const [company, setCompany] = useState("all");
+  const companies = [...new Set(data.members.map((m) => m.company).filter(Boolean))] as string[];
+  const rows = data.requests.filter((r) => {
+    if (area !== "all" && r.zone_id !== area) return false;
+    if (company !== "all") {
+      const member = data.members.find((m) => m.user_id === r.created_by);
+      if ((member?.company ?? "") !== company) return false;
+    }
+    return true;
+  });
   function downloadExcel() {
-    const rows = [
+    const table = [
       ["Channel", "Device", "Category", "Zone", "MHz", "Locked"],
-      ...data.requests.map((r) => [
+      ...rows.map((r) => [
         r.label,
         r.device_name,
         r.category,
@@ -1290,7 +1381,7 @@ function Sheet({ data }: { data: Bundle }) {
         r.locked ? "yes" : "no",
       ]),
     ];
-    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Plot"><Table>${rows
+    const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Plot"><Table>${table
       .map((row) => `<Row>${row.map((c) => `<Cell><Data ss:Type="String">${String(c).replaceAll("&", "&").replaceAll("<", "<")}</Data></Cell>`).join("")}</Row>`)
       .join("")}</Table></Worksheet></Workbook>`;
     const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
@@ -1304,7 +1395,7 @@ function Sheet({ data }: { data: Bundle }) {
 
   function download() {
     const header = ["Category", "Label", "Device", "Zone", "Priority", "From", "Until", "MHz", "Locked"];
-    const lines = data.requests.map((r) =>
+    const lines = rows.map((r) =>
       [
         r.category,
         r.label,
@@ -1331,6 +1422,14 @@ function Sheet({ data }: { data: Bundle }) {
   return (
     <div className="space-y-4">
       <div className="no-print flex flex-wrap gap-2">
+        <select className={fieldClass + " max-w-40"} value={area} onChange={(e) => setArea(e.target.value)}>
+          <option value="all">All areas</option>
+          {data.zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+        </select>
+        <select className={fieldClass + " max-w-40"} value={company} onChange={(e) => setCompany(e.target.value)}>
+          <option value="all">All companies</option>
+          {companies.map((c) => <option key={c}>{c}</option>)}
+        </select>
         <button type="button" className={btnClass} onClick={download}>Download CSV</button>
         <button type="button" className={ghostClass} onClick={downloadExcel}>Download Excel</button>
         <button type="button" className={ghostClass} onClick={() => window.print()}>Print / PDF</button>

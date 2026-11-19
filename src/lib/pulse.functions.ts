@@ -251,8 +251,8 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
   const admin = await isPlatformAdmin(sql, userId);
   const company = await companyOf(sql, userId);
   const batches = await sql<{
-    id: string; zone_id: string | null; created_by: string; title: string; status: string; notes: string; created_at: string;
-  }>`select id, zone_id, created_by, title, status, notes, created_at from request_batches where event_id = ${eventId} order by created_at desc`;
+    id: string; zone_id: string | null; created_by: string; title: string; status: string; notes: string; created_at: string; return_note: string;
+  }>`select id, zone_id, created_by, title, status, notes, created_at, return_note from request_batches where event_id = ${eventId} order by created_at desc`;
   const companyIds = company
     ? (await sql<{ user_id: string }>`select user_id from company_members where company_id = ${company.id}`).map((r) => r.user_id)
     : [];
@@ -1358,20 +1358,112 @@ export const setPlotLock = createServerFn({ method: "POST" })
 
 export const beat = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ eventId: z.string().min(1) }))
+  .validator(z.object({ eventId: z.string().min(1), editing: z.string().optional().default("") }))
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await requireAccess(sql, data.eventId, context.userId, "viewer");
     const users = await sql<{ name: string }>`select name from "user" where id = ${context.userId}`;
+    const editing = data.editing ?? "";
     await sql`
-      insert into presence (event_id, user_id, name, last_seen)
-      values (${data.eventId}, ${context.userId}, ${users[0]?.name ?? "Someone"}, now())
-      on conflict (event_id, user_id) do update set last_seen = now(), name = ${users[0]?.name ?? "Someone"}
+      insert into presence (event_id, user_id, name, last_seen, editing)
+      values (${data.eventId}, ${context.userId}, ${users[0]?.name ?? "Someone"}, now(), ${editing})
+      on conflict (event_id, user_id) do update set last_seen = now(), name = ${users[0]?.name ?? "Someone"}, editing = ${editing}
     `;
-    return sql<{ user_id: string; name: string }>`
-      select user_id, name from presence
+    return sql<{ user_id: string; name: string; editing: string }>`
+      select user_id, name, editing from presence
       where event_id = ${data.eventId} and last_seen > now() - interval '20 seconds'
     `;
+  });
+
+export const updateBatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    batchId: z.string().min(1),
+    title: z.string().trim().min(1).max(80),
+    notes: z.string().trim().max(1000).optional().default(""),
+    priority: z.enum(["critical", "high", "normal", "low"]).optional().default("normal"),
+    timeStart: z.string().optional().default(""),
+    timeEnd: z.string().optional().default(""),
+    dayLabel: z.string().optional().default(""),
+    lines: z.array(z.object({
+      id: z.string().optional(),
+      label: z.string().trim().min(1).max(80),
+      deviceKey: z.string().min(1),
+      deviceName: z.string().min(1),
+      manufacturer: z.string().optional().default(""),
+      bandMin: z.number(),
+      bandMax: z.number(),
+      bandwidth: z.number().positive(),
+      mode: z.enum(["carrier", "band"]),
+      category: z.string().min(1),
+      spare: z.boolean().optional().default(false),
+      notes: z.string().optional().default(""),
+      powerMw: z.number().positive().max(250).optional().default(10),
+    })).min(1).max(40),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const existing = await sql<RequestRow>`select * from requests where batch_id = ${data.batchId} and event_id = ${data.eventId}`;
+    const keep = new Set(data.lines.map((l) => l.id).filter(Boolean));
+    for (const row of existing) {
+      if (!keep.has(row.id)) {
+        await sql`delete from requests where id = ${row.id}`;
+        await history(sql, data.eventId, row.id, context.userId, "removed", row.label);
+      }
+    }
+    const zone = existing[0]?.zone_id ?? null;
+    for (const line of data.lines) {
+      const prior = line.id ? existing.find((r) => r.id === line.id) : undefined;
+      const changed = !prior || prior.label !== line.label || prior.device_key !== line.deviceKey || Number(prior.power_mw) !== line.powerMw || prior.spare !== line.spare;
+      if (prior) {
+        await sql`
+          update requests set
+            label = ${line.label},
+            device_key = ${line.deviceKey},
+            device_name = ${line.deviceName},
+            manufacturer = ${line.manufacturer ?? ""},
+            band_min = ${line.bandMin},
+            band_max = ${line.bandMax},
+            bandwidth = ${line.bandwidth},
+            mode = ${line.mode},
+            notes = ${line.notes ?? ""},
+            spare = ${line.spare ?? false},
+            power_mw = ${line.powerMw ?? 10},
+            assigned_mhz = ${changed ? null : prior.assigned_mhz},
+            locked = ${changed ? false : prior.locked}
+          where id = ${prior.id}
+        `;
+        if (changed) await history(sql, data.eventId, prior.id, context.userId, "edited", "Changed. Frequency cleared.");
+      } else {
+        const id = uid();
+        await sql`
+          insert into requests (
+            id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
+            band_min, band_max, bandwidth, mode, notes, batch_id, spare, power_mw
+          ) values (
+            ${id}, ${data.eventId}, ${zone}, ${context.userId}, ${line.category}, ${line.label},
+            ${line.deviceKey}, ${line.deviceName}, ${line.manufacturer ?? ""}, ${line.bandMin}, ${line.bandMax},
+            ${line.bandwidth}, ${line.mode}, ${line.notes ?? ""}, ${data.batchId}, ${line.spare ?? false}, ${line.powerMw ?? 10}
+          )
+        `;
+        await history(sql, data.eventId, id, context.userId, "added", line.label);
+      }
+    }
+    await sql`
+      update request_batches
+      set title = ${data.title}, notes = ${data.notes ?? ""}, status = ${"submitted"},
+          priority = ${data.priority}, time_start = ${data.timeStart || null}, time_end = ${data.timeEnd || null},
+          day_label = ${data.dayLabel || null}, return_note = ${""}
+      where id = ${data.batchId}
+    `;
+    const managers = await sql<{ user_id: string }>`select user_id from event_members where event_id = ${data.eventId} and role = ${"manager"}`;
+    for (const m of managers) {
+      await sql`insert into notifications (id, user_id, event_id, message) values (${uid()}, ${m.user_id}, ${data.eventId}, ${`${data.title} was edited and is back to submitted`})`;
+    }
+    await logActivity(sql, data.eventId, context.userId, `Edited “${data.title}”. Changed lines were cleared.`);
+    return loadBundle(sql, data.eventId, context.userId);
   });
 
 export const lineHistory = createServerFn({ method: "GET" })

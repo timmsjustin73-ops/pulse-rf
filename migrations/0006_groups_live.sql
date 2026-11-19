@@ -49,3 +49,5 @@ alter table request_batches add column if not exists time_end text;
 alter table request_batches add column if not exists day_label text;
 alter table request_batches add column if not exists priority text not null default 'normal';
 alter table request_batches add column if not exists return_note text not null default '';
+
+alter table presence add column if not exists editing text not null default '';
