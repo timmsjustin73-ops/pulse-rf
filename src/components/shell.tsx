@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Radio } from "lucide-react";
 import { RedirectToSignIn, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { listNotifications, markNotificationsRead } from "@/lib/pulse.functions";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, isPending } = useCurrentUserState();
@@ -29,7 +31,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopLink to="/" label="Events" active={path === "/"} />
             <TopLink to="/library" label="Devices" active={path.startsWith("/library")} />
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <NoticeBell />
             <UserButton />
           </div>
         </div>
@@ -79,4 +82,33 @@ export function messageOf(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string") return error;
   return "Something went wrong.";
+}
+
+function NoticeBell() {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Awaited<ReturnType<typeof listNotifications>>>([]);
+  useEffect(() => {
+    void listNotifications().then(setItems).catch(() => setItems([]));
+  }, [open]);
+  const unread = items.filter((n) => !n.read_at).length;
+  return (
+    <div className="relative">
+      <button type="button" className="relative rounded-lg border border-border px-2 py-1 text-xs" onClick={() => setOpen((v) => !v)}>
+        Notices{unread > 0 ? ` ${unread}` : ""}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-2 text-sm shadow-lg">
+          {items.length === 0 && <p className="px-2 py-3 text-muted">No notices.</p>}
+          {items.map((n) => (
+            <p key={n.id} className="border-b border-border px-2 py-2 last:border-0">{n.message}</p>
+          ))}
+          {unread > 0 && (
+            <button type="button" className="mt-1 px-2 text-xs text-primary" onClick={() => void markNotificationsRead().then(() => setItems((cur) => cur.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() }))))}>
+              Mark read
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

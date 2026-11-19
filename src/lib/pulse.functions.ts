@@ -10,12 +10,41 @@ import {
   type Role,
   type Blocker,
 } from "@/lib/catalog";
-import { audit, coordinate, parseScan, snapCarrier, spectrumRuleFor, tuneStepOf, type BandBlock, type CoordItem } from "@/lib/coord";
+import { audit, coordinate, intermodHits, parseScan, snapCarrier, spectrumRuleFor, tuneStepOf, type BandBlock, type CoordItem } from "@/lib/coord";
 
-const RANK: Record<Role, number> = { viewer: 0, contributor: 1, manager: 2 };
+const RANK: Record<Role, number> = { viewer: 0, contributor: 1, tech: 1, manager: 2 };
 
 function isRole(v: string): v is Role {
-  return v === "manager" || v === "contributor" || v === "viewer";
+  return v === "manager" || v === "tech" || v === "contributor" || v === "viewer";
+}
+
+function asRole(v: string): Role {
+  if (v === "contributor") return "tech";
+  return isRole(v) ? v : "viewer";
+}
+
+async function isPlatformAdmin(sql: Sql, userId: string): Promise<boolean> {
+  const rows = await sql<{ user_id: string }>`select user_id from platform_admins where user_id = ${userId}`;
+  if (rows.length > 0) return true;
+  const wanted = (process.env.PULSE_ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (!wanted) return false;
+  const users = await sql<{ email: string }>`select email from "user" where id = ${userId}`;
+  if (users[0]?.email?.toLowerCase() === wanted) {
+    await sql`insert into platform_admins (user_id) values (${userId}) on conflict do nothing`;
+    return true;
+  }
+  return false;
+}
+
+async function companyOf(sql: Sql, userId: string): Promise<{ id: string; name: string } | null> {
+  const rows = await sql<{ id: string; name: string }>`
+    select c.id, c.name
+    from company_members m
+    join companies c on c.id = m.company_id
+    where m.user_id = ${userId}
+    limit 1
+  `;
+  return rows[0] ?? null;
 }
 
 function uid(): string {
@@ -68,6 +97,10 @@ type RequestRow = {
   locked: boolean;
   assigned_mhz: number | null;
   created_at: string;
+  batch_id: string | null;
+  tuned_at: string | null;
+  tuned_by: string | null;
+  spare: boolean;
 };
 type ScanRow = {
   id: string;
@@ -104,6 +137,11 @@ function parseBlockers(raw: string): Blocker[] {
 }
 
 async function requireAccess(sql: Sql, eventId: string, userId: string, min: Role) {
+  if (await isPlatformAdmin(sql, userId)) {
+    const owners = await sql<{ owner_id: string }>`select owner_id from events where id = ${eventId}`;
+    if (owners.length === 0) throw new Error("Event not found.");
+    return { role: "manager", owner_id: owners[0]!.owner_id };
+  }
   const rows = await sql<{ role: string; owner_id: string }>`
     select m.role, e.owner_id
     from events e
@@ -112,8 +150,8 @@ async function requireAccess(sql: Sql, eventId: string, userId: string, min: Rol
   `;
   const row = rows[0];
   if (!row || !isRole(row.role)) throw new Error("You don't have access to this event.");
-  if (RANK[row.role] < RANK[min]) throw new Error("Your role can't do that.");
-  return row;
+  if (RANK[asRole(row.role)] < RANK[asRole(min)]) throw new Error("Your role can't do that.");
+  return { role: asRole(row.role), owner_id: row.owner_id };
 }
 
 async function logActivity(sql: Sql, eventId: string, userId: string, message: string) {
@@ -171,10 +209,12 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     id: string; name: string; power_mw: number; gain_dbi: number; freq_mhz: number;
     height_m: number; threshold_dbm: number; margin_db: number;
   }>`select id, name, power_mw, gain_dbi, freq_mhz, height_m, threshold_dbm, margin_db from antennas where event_id = ${eventId} order by name`;
-  const members = await sql<{ user_id: string; role: string; name: string | null; email: string | null }>`
-    select m.user_id, m.role, u.name, u.email
+  const members = await sql<{ user_id: string; role: string; name: string | null; email: string | null; company: string | null }>`
+    select m.user_id, m.role, u.name, u.email, c.name as company
     from event_members m
     left join "user" u on u.id = m.user_id
+    left join company_members cm on cm.user_id = m.user_id
+    left join companies c on c.id = cm.company_id
     where m.event_id = ${eventId}
     order by m.role, u.name
   `;
@@ -187,6 +227,14 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     limit 12
   `;
   const mine = members.find((m) => m.user_id === userId);
+  const admin = await isPlatformAdmin(sql, userId);
+  const company = await companyOf(sql, userId);
+  const batches = await sql<{
+    id: string; zone_id: string | null; created_by: string; title: string; status: string; notes: string; created_at: string;
+  }>`select id, zone_id, created_by, title, status, notes, created_at from request_batches where event_id = ${eventId} order by created_at desc`;
+  const companyIds = company
+    ? (await sql<{ user_id: string }>`select user_id from company_members where company_id = ${company.id}`).map((r) => r.user_id)
+    : [];
   const zonesClean = zones.map((z) => ({ ...z, isolated: flag(z.isolated) }));
   const requestsClean = requests.map((r) => ({
     ...r,
@@ -212,7 +260,10 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
       ...event,
       blockers: parseBlockers(event.blockers),
     },
-    role: (mine && isRole(mine.role) ? mine.role : "viewer") as Role,
+    role: admin ? "manager" : mine ? asRole(mine.role) : "viewer",
+    isAdmin: admin,
+    company,
+    companyUserIds: companyIds,
     isOwner: event.owner_id === userId,
     zones: zonesClean,
     requests: requestsClean,
@@ -230,6 +281,12 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     members,
     activity,
     issues,
+    batches,
+    intermods: intermodHits(
+      requestsClean
+        .filter((r) => r.assigned_mhz != null)
+        .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number })),
+    ),
     antennas: antennas.map((a) => ({
       id: a.id,
       name: a.name,
@@ -297,13 +354,18 @@ export const listEvents = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    const events = await sql<EventRow & { role: string }>`
-      select e.*, m.role
-      from events e
-      join event_members m on m.event_id = e.id
-      where m.user_id = ${context.userId}
-      order by e.created_at desc
-    `;
+    const admin = await isPlatformAdmin(sql, context.userId);
+    const events = admin
+      ? await sql<EventRow & { role: string }>`
+          select e.*, 'manager' as role from events e order by e.created_at desc
+        `
+      : await sql<EventRow & { role: string }>`
+          select e.*, m.role
+          from events e
+          join event_members m on m.event_id = e.id
+          where m.user_id = ${context.userId}
+          order by e.created_at desc
+        `;
     const stats = await sql<{ event_id: string; total: number; assigned: number }>`
       select r.event_id,
              count(*)::int as total,
@@ -350,7 +412,7 @@ export const joinEvent = createServerFn({ method: "POST" })
     `;
     const event = rows[0];
     if (!event) throw new Error("No event uses that code.");
-    const role: Role = event.join_role === "viewer" ? "viewer" : "contributor";
+    const role: Role = event.join_role === "viewer" ? "viewer" : "tech";
     await sql`
       insert into event_members (event_id, user_id, role)
       values (${event.id}, ${context.userId}, ${role})
@@ -644,6 +706,14 @@ async function runCalc(sql: Sql, eventId: string, userId: string) {
   const open = requests.filter((r) => !(r.locked && r.assigned_mhz != null)).length;
   const placed = requests.filter((r) => !(r.locked && r.assigned_mhz != null) && result[r.id] != null).length;
   await logActivity(sql, eventId, userId, `Coordinated ${placed} of ${open} open channels.`);
+  const owners = [...new Set(requests.map((r) => r.created_by))];
+  for (const owner of owners) {
+    if (owner === userId) continue;
+    await sql`
+      insert into notifications (id, user_id, event_id, message)
+      values (${uid()}, ${owner}, ${eventId}, ${"Your request was coordinated. Check assigned frequencies."})
+    `;
+  }
 }
 
 export const recalculate = createServerFn({ method: "POST" })
@@ -841,7 +911,7 @@ export const setMemberRole = createServerFn({ method: "POST" })
   .validator(z.object({
     eventId: z.string().min(1),
     userId: z.string().min(1),
-    role: z.enum(["manager", "contributor", "viewer"]),
+    role: z.enum(["manager", "tech", "contributor", "viewer"]),
   }))
   .handler(async ({ context, data }) => {
     const sql = await getSql();
@@ -937,4 +1007,134 @@ export const deleteAntenna = createServerFn({ method: "POST" })
     await requireAccess(sql, data.eventId, context.userId, "manager");
     await sql`delete from antennas where id = ${data.antennaId} and event_id = ${data.eventId}`;
     return loadBundle(sql, data.eventId, context.userId);
+  });
+
+const batchLine = z.object({
+  label: z.string().trim().min(1).max(80),
+  deviceKey: z.string().min(1),
+  deviceName: z.string().min(1),
+  manufacturer: z.string().optional().default(""),
+  bandMin: z.number(),
+  bandMax: z.number(),
+  bandwidth: z.number().positive(),
+  mode: z.enum(["carrier", "band"]),
+  category: z.string().min(1),
+  spare: z.boolean().optional().default(false),
+  notes: z.string().trim().max(500).optional().default(""),
+});
+
+export const submitBatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    z.object({
+      eventId: z.string().min(1),
+      zoneId: z.string().min(1),
+      title: z.string().trim().min(1).max(80),
+      notes: z.string().trim().max(1000).optional().default(""),
+      lines: z.array(batchLine).min(1).max(40),
+    }),
+  )
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const batchId = uid();
+    await sql`
+      insert into request_batches (id, event_id, zone_id, created_by, title, status, notes)
+      values (${batchId}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${data.title}, ${"submitted"}, ${data.notes ?? ""})
+    `;
+    for (const line of data.lines) {
+      await sql`
+        insert into requests (
+          id, event_id, zone_id, created_by, category, label, device_key, device_name,
+          manufacturer, band_min, band_max, bandwidth, mode, notes, batch_id, spare
+        ) values (
+          ${uid()}, ${data.eventId}, ${data.zoneId}, ${context.userId}, ${line.category}, ${line.label},
+          ${line.deviceKey}, ${line.deviceName}, ${line.manufacturer ?? ""}, ${line.bandMin}, ${line.bandMax},
+          ${line.bandwidth}, ${line.mode}, ${line.notes ?? ""}, ${batchId}, ${line.spare ?? false}
+        )
+      `;
+    }
+    await logActivity(sql, data.eventId, context.userId, `Submitted ${data.lines.length} devices in “${data.title}”.`);
+    const managers = await sql<{ user_id: string }>`
+      select user_id from event_members where event_id = ${data.eventId} and role = ${"manager"}
+    `;
+    for (const m of managers) {
+      if (m.user_id === context.userId) continue;
+      await sql`
+        insert into notifications (id, user_id, event_id, message)
+        values (${uid()}, ${m.user_id}, ${data.eventId}, ${`${data.title}: ${data.lines.length} devices submitted`})
+      `;
+    }
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const markTuned = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1), tuned: z.boolean() }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const rows = await sql<{ created_by: string; label: string; assigned_mhz: number | null }>`
+      select created_by, label, assigned_mhz from requests where id = ${data.requestId} and event_id = ${data.eventId}
+    `;
+    const row = rows[0];
+    if (!row) throw new Error("Request not found.");
+    const admin = await isPlatformAdmin(sql, context.userId);
+    const access = await requireAccess(sql, data.eventId, context.userId, "viewer");
+    const manager = access.role === "manager" || admin;
+    if (!manager) {
+      const company = await companyOf(sql, context.userId);
+      const mates = company
+        ? (await sql<{ user_id: string }>`select user_id from company_members where company_id = ${company.id}`).map((r) => r.user_id)
+        : [context.userId];
+      if (!mates.includes(row.created_by) && row.created_by !== context.userId) {
+        throw new Error("That request is another company's.");
+      }
+    }
+    await sql`
+      update requests
+      set tuned_at = ${data.tuned ? new Date().toISOString() : null},
+          tuned_by = ${data.tuned ? context.userId : null}
+      where id = ${data.requestId}
+    `;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const setMemberCompany = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), userId: z.string().min(1), company: z.string().trim().max(80) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const name = data.company.trim();
+    await sql`delete from company_members where user_id = ${data.userId}`;
+    if (name) {
+      const existing = await sql<{ id: string }>`select id from companies where lower(name) = ${name.toLowerCase()}`;
+      const id = existing[0]?.id ?? uid();
+      if (!existing[0]) await sql`insert into companies (id, name) values (${id}, ${name})`;
+      await sql`insert into company_members (company_id, user_id) values (${id}, ${data.userId}) on conflict do nothing`;
+    }
+    await logActivity(sql, data.eventId, context.userId, name ? `Set company to ${name}.` : "Cleared a company.");
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const listNotifications = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    return sql<{ id: string; message: string; event_id: string | null; read_at: string | null; created_at: string }>`
+      select id, message, event_id, read_at, created_at
+      from notifications
+      where user_id = ${context.userId}
+      order by created_at desc
+      limit 20
+    `;
+  });
+
+export const markNotificationsRead = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    await sql`update notifications set read_at = now() where user_id = ${context.userId} and read_at is null`;
+    return { ok: true };
   });

@@ -475,3 +475,61 @@ export function parseScan(body: string, threshold: number): BandBlock[] {
   }
   return blocks;
 }
+
+export type IntermodHit = {
+  order: 2 | 3 | 5;
+  product: number;
+  formula: string;
+  hits: string;
+};
+
+/** 2nd, 3rd and 5th order products that land on an assigned carrier. */
+export function intermodHits(
+  carriers: { id: string; label: string; mhz: number }[],
+  window = 0.2,
+): IntermodHit[] {
+  const hits: IntermodHit[] = [];
+  const seen = new Set<string>();
+  const near = (product: number) =>
+    carriers.filter((c) => Math.abs(c.mhz - product) <= window);
+  const push = (order: 2 | 3 | 5, product: number, formula: string, landed: { label: string }[]) => {
+    if (landed.length === 0 || !Number.isFinite(product) || product < 30 || product > 8000) return;
+    const key = `${order}:${formula}:${landed.map((l) => l.label).join(",")}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({
+      order,
+      product: Math.round(product * 1000) / 1000,
+      formula,
+      hits: landed.map((l) => l.label).join(", "),
+    });
+  };
+  const n = carriers.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const a = carriers[i]!;
+      const b = carriers[j]!;
+      push(2, a.mhz + b.mhz, `${a.label}+${b.label}`, near(a.mhz + b.mhz));
+      push(2, Math.abs(a.mhz - b.mhz), `|${a.label}-${b.label}|`, near(Math.abs(a.mhz - b.mhz)));
+      const third = 2 * a.mhz - b.mhz;
+      push(3, third, `2${a.label}-${b.label}`, near(third).filter((c) => c.id !== a.id && c.id !== b.id));
+      const fifth = 3 * a.mhz - 2 * b.mhz;
+      push(5, fifth, `3${a.label}-2${b.label}`, near(fifth).filter((c) => c.id !== a.id && c.id !== b.id));
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      for (let k = 0; k < n; k++) {
+        if (k === i || k === j) continue;
+        const a = carriers[i]!;
+        const b = carriers[j]!;
+        const c = carriers[k]!;
+        const p = a.mhz + b.mhz - c.mhz;
+        push(3, p, `${a.label}+${b.label}-${c.label}`, near(p).filter((x) => x.id !== a.id && x.id !== b.id && x.id !== c.id));
+      }
+    }
+  }
+  return hits.sort((x, y) => x.order - y.order || x.product - y.product).slice(0, 40);
+}

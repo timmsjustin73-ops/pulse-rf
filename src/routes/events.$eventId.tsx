@@ -33,13 +33,16 @@ import {
   undoCoordinate,
   updateEvent,
   updateRequest,
+  submitBatch,
+  markTuned,
+  setMemberCompany,
 } from "@/lib/pulse.functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/events/$eventId")({ component: EventRoute });
 
 type Bundle = Awaited<ReturnType<typeof getEvent>>;
-type Tab = "plot" | "request" | "zones" | "scans" | "antennas" | "settings" | "sheet";
+type Tab = "plot" | "mine" | "request" | "zones" | "scans" | "antennas" | "settings" | "sheet";
 
 function EventRoute() {
   return (
@@ -104,6 +107,11 @@ function EventScreen() {
 
   const manager = data.role === "manager";
   const canRequest = data.role !== "viewer";
+  const allowed = new Set(data.companyUserIds ?? []);
+  if (user?.id) allowed.add(user.id);
+  const visible = manager
+    ? data
+    : { ...data, requests: data.requests.filter((r) => allowed.has(r.created_by)), intermods: [] as Bundle["intermods"] };
   const open = data.requests.filter((r) => r.assigned_mhz == null).length;
   const bad = data.issues.filter((i) => i.severity === "bad").length;
 
@@ -161,6 +169,7 @@ function EventScreen() {
         {(
           [
             ["plot", "Plot"],
+            ["mine", "My requests"],
             ["request", "Request"],
             ["zones", "Zones"],
             ["scans", "Scans"],
@@ -182,7 +191,8 @@ function EventScreen() {
           </button>
         ))}
       </div>
-      {tab === "plot" && <Plot data={data} manager={manager} busy={busy} run={run} />}
+      {tab === "plot" && <Plot data={visible} manager={manager} busy={busy} run={run} />}
+      {tab === "mine" && <MyRequests data={visible} custom={custom} canRequest={canRequest} busy={busy} run={run} />}
       {tab === "request" && (
         <RequestForm data={data} custom={custom} canRequest={canRequest} busy={busy} run={run} />
       )}
@@ -288,6 +298,7 @@ function Plot({
               <th className="px-3 py-2 font-medium">Zone</th>
               <th className="px-3 py-2 font-medium">When</th>
               <th className="px-3 py-2 font-medium">MHz</th>
+              <th className="px-3 py-2 font-medium">Tuned</th>
               {manager && <th className="px-3 py-2 font-medium">Lock</th>}
             </tr>
           </thead>
@@ -310,7 +321,25 @@ function Plot({
                 <td className="px-3 py-2 font-mono text-xs tabular-nums text-muted">
                   {r.time_start && r.time_end ? `${r.time_start}–${r.time_end}` : "All day"}
                 </td>
-                <td className="px-3 py-2 font-mono tabular-nums text-primary">{formatMhz(r.assigned_mhz)}</td>
+                <td className="px-3 py-2 font-mono tabular-nums text-primary">
+                  {formatMhz(r.assigned_mhz)}
+                  {r.spare ? <span className="ml-2 text-xs text-muted">spare</span> : null}
+                </td>
+                <td className="px-3 py-2">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(r.tuned_at)}
+                      disabled={busy !== "" || r.assigned_mhz == null}
+                      onChange={(e) =>
+                        void run("tune", () =>
+                          markTuned({ data: { eventId: data.event.id, requestId: r.id, tuned: e.target.checked } }),
+                        )
+                      }
+                    />
+                    {r.tuned_at ? "Tuned" : "Not tuned"}
+                  </label>
+                </td>
                 {manager && (
                   <td className="px-3 py-2">
                     <div className="flex gap-2">
@@ -360,6 +389,18 @@ function Plot({
           </tbody>
         </table>
       </div>
+      {manager && data.intermods.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <h3 className="font-medium">Intermod 2 / 3 / 5</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {data.intermods.map((hit) => (
+              <li key={`${hit.order}-${hit.formula}`}>
+                <span className="font-mono text-primary">{hit.order}</span> {hit.formula} → {formatMhz(hit.product)} hits {hit.hits}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {data.activity.length > 0 && (
         <ul className="space-y-1 text-sm text-muted">
           {data.activity.map((a) => (
@@ -369,6 +410,143 @@ function Plot({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function MyRequests({
+  data,
+  custom,
+  canRequest,
+  busy,
+  run,
+}: {
+  data: Bundle;
+  custom: Awaited<ReturnType<typeof listCustomDevices>>;
+  canRequest: boolean;
+  busy: string;
+  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
+}) {
+  const devices = useMemo(
+    () => CATALOG.map((d) => ({ ...d, bandMin: d.bandMin, bandMax: d.bandMax, mode: d.mode })),
+    [],
+  );
+  void custom;
+  const makers = useMemo(() => [...new Set(devices.map((d) => d.manufacturer))].sort(), [devices]);
+  const [zoneId, setZoneId] = useState(data.zones[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [maker, setMaker] = useState(makers[0] ?? "");
+  const series = useMemo(() => [...new Set(devices.filter((d) => d.manufacturer === maker).map((d) => d.series))], [devices, maker]);
+  const [make, setMake] = useState(series[0] ?? "");
+  const bands = useMemo(() => devices.filter((d) => d.manufacturer === maker && d.series === make), [devices, maker, make]);
+  const [band, setBand] = useState(bands[0]?.key ?? "");
+  const [label, setLabel] = useState("");
+  const [spare, setSpare] = useState(false);
+  const [lines, setLines] = useState<{ label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string }[]>([]);
+  const device = bands.find((d) => d.key === band) ?? bands[0];
+
+  function addLine() {
+    if (!device || !label.trim()) return;
+    setLines((cur) => [
+      ...cur,
+      {
+        label: label.trim(),
+        spare,
+        deviceKey: device.key,
+        deviceName: device.name,
+        manufacturer: device.manufacturer,
+        bandMin: device.bandMin,
+        bandMax: device.bandMax,
+        bandwidth: device.bandwidth,
+        mode: device.mode === "band" ? "band" as const : "carrier" as const,
+        category: device.category,
+      },
+    ]);
+    setLabel("");
+    setSpare(false);
+  }
+
+  if (!canRequest) return <p className="text-sm text-muted">Viewers can read the plot but not submit requests.</p>;
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <h2 className="font-semibold">My requests</h2>
+        <p className="mt-1 text-sm text-muted">One submission, many devices, one zone. Only your company sees these until a manager coordinates.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Title
+            <input className={fieldClass + " mt-1"} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Main stage vocals" />
+          </label>
+          <label className="text-sm">Zone
+            <select className={fieldClass + " mt-1"} value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+              {data.zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Manufacturer
+            <select className={fieldClass + " mt-1"} value={maker} onChange={(e) => { setMaker(e.target.value); setMake(""); setBand(""); }}>
+              {makers.map((m) => <option key={m}>{m}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Make
+            <select className={fieldClass + " mt-1"} value={make} onChange={(e) => { setMake(e.target.value); setBand(""); }}>
+              {series.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Band
+            <select className={fieldClass + " mt-1"} value={band} onChange={(e) => setBand(e.target.value)}>
+              {bands.map((d) => <option key={d.key} value={d.key}>{d.band || d.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Channel
+            <input className={fieldClass + " mt-1"} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Lead vocal" />
+          </label>
+        </div>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={spare} onChange={(e) => setSpare(e.target.checked)} /> Spare
+        </label>
+        <div className="mt-3 flex gap-2">
+          <button type="button" className={ghostClass} onClick={addLine}>Add line</button>
+          <button
+            type="button"
+            className={btnClass}
+            disabled={busy !== "" || lines.length === 0 || !title.trim()}
+            onClick={() =>
+              void run("batch", async () => {
+                const next = await submitBatch({ data: { eventId: data.event.id, zoneId, title: title.trim(), lines } });
+                setLines([]);
+                setTitle("");
+                return next;
+              })
+            }
+          >
+            {busy === "batch" ? "Submitting…" : `Submit ${lines.length || ""}`.trim()}
+          </button>
+        </div>
+        {lines.length > 0 && (
+          <ul className="mt-3 space-y-1 text-sm">
+            {lines.map((line, i) => (
+              <li key={`${line.label}-${i}`} className="flex justify-between gap-3">
+                <span>{line.label} · {line.deviceName}{line.spare ? " · spare" : ""}</span>
+                <button type="button" className="text-xs text-bad" onClick={() => setLines((cur) => cur.filter((_, n) => n !== i))}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="space-y-2">
+        {data.batches.filter((b) => data.requests.some((r) => r.batch_id === b.id)).map((b) => (
+          <div key={b.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="font-medium">{b.title}</span>
+              <span className="text-muted">{b.status}</span>
+            </div>
+            <ul className="mt-2 space-y-1 text-muted">
+              {data.requests.filter((r) => r.batch_id === b.id).map((r) => (
+                <li key={r.id}>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -845,18 +1023,34 @@ function Settings({
                       data: {
                         eventId: data.event.id,
                         userId: m.user_id,
-                        role: e.target.value as "manager" | "contributor" | "viewer",
+                        role: (e.target.value === "contributor" ? "tech" : e.target.value) as "manager" | "tech" | "contributor" | "viewer",
                       },
                     }),
                   )
                 }
               >
-                <option value="manager">manager</option>
-                <option value="contributor">contributor</option>
+                <option value="manager">RF manager</option>
+                <option value="tech">tech</option>
+                <option value="contributor">tech</option>
                 <option value="viewer">viewer</option>
               </select>
             ) : (
               <span className="text-muted">{m.role}</span>
+            )}
+            {manager ? (
+              <input
+                className={fieldClass + " max-w-40"}
+                defaultValue={m.company ?? ""}
+                placeholder="Company"
+                onBlur={(e) => {
+                  if ((e.target.value || "") === (m.company ?? "")) return;
+                  void run("company", () =>
+                    setMemberCompany({ data: { eventId: data.event.id, userId: m.user_id, company: e.target.value } }),
+                  );
+                }}
+              />
+            ) : (
+              <span className="text-muted">{m.company ?? "No company"}</span>
             )}
           </div>
         ))}

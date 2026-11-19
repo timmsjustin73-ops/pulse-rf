@@ -2,7 +2,7 @@ export type Category = "audio" | "video" | "lighting" | "comms";
 export type DeviceMode = "carrier" | "band";
 export type Spacing = "resilience" | "balanced" | "density";
 export type Priority = "critical" | "high" | "normal" | "low";
-export type Role = "manager" | "contributor" | "viewer";
+export type Role = "manager" | "tech" | "contributor" | "viewer";
 
 export type CatalogDevice = {
   key: string;
