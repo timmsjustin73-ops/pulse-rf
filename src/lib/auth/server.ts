@@ -127,6 +127,28 @@ const trustedOrigins: string[] = explicitBaseURL
 
 const databaseUrl = env("DATABASE_URL");
 
+// `__Host-` cookies are Secure-only. Browsers keep them on https and on
+// http://localhost, and silently drop them on any other http origin — so a
+// sign-in on a VPS at http://host:8080 looks like it did nothing. Use a plain
+// cookie when the public URL is plain HTTP on a real host.
+function cookieSecureContext(publicUrl: string | undefined): boolean {
+  if (!publicUrl) return true;
+  try {
+    const url = new URL(publicUrl);
+    if (url.protocol === "https:") return true;
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return true;
+  }
+}
+
+const secureCookies = cookieSecureContext(explicitBaseURL);
+const cookiePrefix = secureCookies ? "__Host-grok-auth" : "grok-auth";
+
+/** Session token cookie name — also read by the live-preview popup completion page. */
+export const SESSION_TOKEN_COOKIE = `${cookiePrefix}.session_token`;
+
 // Static broker OAuth endpoints (skip OIDC discovery on every sign-in / callback).
 // Discovery would cost an extra network hop to the broker before the popup can
 // even redirect to Google/X — the live-preview popup felt stuck on the app for
@@ -144,9 +166,6 @@ const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
 const database = databaseUrl
   ? new Pool({ connectionString: databaseUrl })
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
-
-/** Session token cookie name — also read by the live-preview popup completion page. */
-export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 
 // Built separately so the `betterAuth({...})` call stays easy to edit without
 // breaking brackets (models often trip on the conditional plugin spread).
@@ -219,15 +238,20 @@ export const auth = betterAuth({
   // Path=/ + no Domain; Better Auth otherwise uses `__Secure-` (which permits
   // Domain), so we drop its auto prefix (`useSecureCookies: false`) and set
   // Secure + the names ourselves. (Browsers allow Secure cookies on
-  // `http://localhost`, so local dev still works.)
+  // `http://localhost`, so local dev still works.) A plain-HTTP public URL
+  // cannot store those cookies, so that install uses an unprefixed name.
   advanced: {
     useSecureCookies: false,
-    defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
+    defaultCookieAttributes: {
+      secure: secureCookies,
+      sameSite: "lax",
+      path: "/",
+    },
     cookies: {
       session_token: { name: SESSION_TOKEN_COOKIE },
-      session_data: { name: "__Host-grok-auth.session_data" },
-      account_data: { name: "__Host-grok-auth.account_data" },
-      dont_remember: { name: "__Host-grok-auth.dont_remember" },
+      session_data: { name: `${cookiePrefix}.session_data` },
+      account_data: { name: `${cookiePrefix}.account_data` },
+      dont_remember: { name: `${cookiePrefix}.dont_remember` },
     },
   },
 
