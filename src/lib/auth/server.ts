@@ -139,17 +139,14 @@ const trustedOrigins = (request?: Request): string[] => {
 
 const databaseUrl = env("DATABASE_URL");
 
-// `__Host-` cookies are Secure-only. Browsers keep them on https and on
-// http://localhost, and silently drop them on any other http origin — so a
-// sign-in on a VPS at http://host:8080 looks like it did nothing. Use a plain
-// cookie when the public URL is plain HTTP on a real host.
+// `__Host-` cookies are Secure-only. Browsers keep them on HTTPS and drop them
+// on any other http origin, so a sign-in at http://host:8080 never sticks.
+// Use a plain cookie unless the configured public URL is HTTPS. Plain HTTP,
+// including the Docker default of http://localhost:8080, still signs in.
 function cookieSecureContext(publicUrl: string | undefined): boolean {
   if (!publicUrl) return true;
   try {
-    const url = new URL(publicUrl);
-    if (url.protocol === "https:") return true;
-    const host = url.hostname.replace(/^\[|\]$/g, "");
-    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+    return new URL(publicUrl).protocol === "https:";
   } catch {
     return true;
   }
