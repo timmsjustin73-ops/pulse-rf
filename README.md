@@ -11,6 +11,14 @@ This runs the whole planner: sign-in, events, the device library, and a Postgres
 ```bash
 git clone https://github.com/timmsjustin73-ops/pulse-rf.git
 cd pulse-rf
+docker compose up -d
+```
+
+That pulls the image GitHub already built: `ghcr.io/timmsjustin73-ops/pulse-rf:latest`.
+
+If the pull is refused, build it on your machine instead:
+
+```bash
 docker compose up -d --build
 ```
 

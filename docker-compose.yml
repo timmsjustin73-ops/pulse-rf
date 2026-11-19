@@ -15,6 +15,7 @@ services:
     restart: unless-stopped
 
   app:
+    image: ghcr.io/timmsjustin73-ops/pulse-rf:latest
     build: .
     ports:
       - "8080:8080"
