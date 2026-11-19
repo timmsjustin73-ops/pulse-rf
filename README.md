@@ -11,16 +11,10 @@ This runs the whole planner: sign-in, events, the device library, and a Postgres
 ```bash
 git clone https://github.com/timmsjustin73-ops/pulse-rf.git
 cd pulse-rf
-docker compose up -d
-```
-
-That pulls the image GitHub already built: `ghcr.io/timmsjustin73-ops/pulse-rf:latest`.
-
-If the pull is refused, build it on your machine instead:
-
-```bash
 docker compose up -d --build
 ```
+
+GitHub also publishes `ghcr.io/timmsjustin73-ops/pulse-rf:latest`. That package starts private. Open [the package settings](https://github.com/timmsjustin73-ops/pulse-rf/pkgs/container/pulse-rf/settings), set visibility to Public, then `docker compose up -d` can pull it instead of building.
 
 Open http://localhost:8080 and create an account with email and password.
 

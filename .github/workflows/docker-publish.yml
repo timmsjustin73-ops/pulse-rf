@@ -30,12 +30,3 @@ jobs:
           tags: |
             ghcr.io/timmsjustin73-ops/pulse-rf:latest
             ghcr.io/timmsjustin73-ops/pulse-rf:${{ github.sha }}
-
-      - name: Make the image public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            /user/packages/container/pulse-rf/visibility \
-            -f visibility=public
