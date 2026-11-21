@@ -1481,3 +1481,88 @@ export const lineHistory = createServerFn({ method: "GET" })
       limit 12
     `;
   });
+
+export const listRequestsAcrossEvents = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const admin = await isPlatformAdmin(sql, context.userId);
+    const company = await companyOf(sql, context.userId);
+    const rows = admin
+      ? await sql<{
+          id: string; event_id: string; event_name: string; created_by: string; creator_name: string | null;
+          category: string; label: string; device_key: string; device_name: string; manufacturer: string; band_min: number; band_max: number;
+          assigned_mhz: number | null; spare: boolean; notes: string; power_mw: number | null; batch_title: string | null;
+        }>`
+          select r.id, r.event_id, e.name as event_name, r.created_by, u.name as creator_name,
+                 r.category, r.label, r.device_key, r.device_name, r.manufacturer, r.band_min, r.band_max,
+                 r.assigned_mhz, r.spare, r.notes, r.power_mw, b.title as batch_title
+          from requests r
+          join events e on e.id = r.event_id
+          left join "user" u on u.id = r.created_by
+          left join request_batches b on b.id = r.batch_id
+          order by u.name, e.name, r.category, r.label
+        `
+      : await sql<{
+          id: string; event_id: string; event_name: string; created_by: string; creator_name: string | null;
+          category: string; label: string; device_key: string; device_name: string; manufacturer: string; band_min: number; band_max: number;
+          assigned_mhz: number | null; spare: boolean; notes: string; power_mw: number | null; batch_title: string | null;
+        }>`
+          select r.id, r.event_id, e.name as event_name, r.created_by, u.name as creator_name,
+                 r.category, r.label, r.device_key, r.device_name, r.manufacturer, r.band_min, r.band_max,
+                 r.assigned_mhz, r.spare, r.notes, r.power_mw, b.title as batch_title
+          from requests r
+          join events e on e.id = r.event_id
+          join event_members m on m.event_id = r.event_id and m.user_id = ${context.userId}
+          left join "user" u on u.id = r.created_by
+          left join request_batches b on b.id = r.batch_id
+          where r.created_by = ${context.userId}
+             or (m.role = ${"manager"})
+             or (${company?.id ?? null} is not null and r.created_by in (select user_id from company_members where company_id = ${company?.id ?? "none"}))
+          order by u.name, e.name, r.category, r.label
+        `;
+    return rows;
+  });
+
+export const editRequestLine = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    requestId: z.string().min(1),
+    label: z.string().trim().min(1).max(80),
+    notes: z.string().optional().default(""),
+    powerMw: z.number().positive().max(250).optional().default(10),
+    deviceKey: z.string().min(1),
+    deviceName: z.string().min(1),
+    manufacturer: z.string().optional().default(""),
+    bandMin: z.number(),
+    bandMax: z.number(),
+    bandwidth: z.number().positive(),
+    mode: z.enum(["carrier", "band"]),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const rows = await sql<RequestRow>`select * from requests where id = ${data.requestId} and event_id = ${data.eventId}`;
+    const row = rows[0];
+    if (!row) throw new Error("Request not found.");
+    const changed = row.device_key !== data.deviceKey || row.label !== data.label || Number(row.power_mw) !== data.powerMw;
+    await sql`
+      update requests set
+        label = ${data.label},
+        notes = ${data.notes ?? ""},
+        power_mw = ${data.powerMw ?? 10},
+        device_key = ${data.deviceKey},
+        device_name = ${data.deviceName},
+        manufacturer = ${data.manufacturer ?? ""},
+        band_min = ${data.bandMin},
+        band_max = ${data.bandMax},
+        bandwidth = ${data.bandwidth},
+        mode = ${data.mode},
+        assigned_mhz = ${changed ? null : row.assigned_mhz},
+        locked = ${changed ? false : row.locked}
+      where id = ${data.requestId}
+    `;
+    if (changed) await history(sql, data.eventId, data.requestId, context.userId, "edited", "Changed from Requests page");
+    return { ok: true as const };
+  });
