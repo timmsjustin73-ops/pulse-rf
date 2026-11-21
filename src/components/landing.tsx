@@ -214,7 +214,7 @@ export function Landing() {
 
       <footer className="relative z-10 border-t border-border py-6 text-center text-xs text-muted">
         Pulse RF · Audio, video, lighting, and comms coordination
-      </footer>
+      <p className="mt-4 text-xs text-muted"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p></footer>
     </div>
   );
 }

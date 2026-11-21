@@ -123,7 +123,8 @@ function Login() {
                 >
                   {mode === "in" ? "Need an account? Create one" : "Already have an account? Sign in"}
                 </button>
-              </form>
+              <p className="text-xs text-muted"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+      </form>
             </>
           ) : (
             <p className="text-sm text-muted">Sign-in is turned off.</p>
