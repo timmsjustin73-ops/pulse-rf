@@ -79,7 +79,7 @@ function People({ people, onChange }: { people: Awaited<ReturnType<typeof listPe
         <form className="space-y-3 rounded-xl border border-border p-4 text-sm" onSubmit={(e) => {
           e.preventDefault();
           setMsg("Saving…");
-          void setUserAccess, deleteUser({ data: { userId: user.id, admin, companyId, owner } })
+          void setUserAccess({ data: { userId: user.id, admin, companyId, owner } })
             .then(() => { setMsg("Saved"); onChange(); })
             .catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Save failed"));
         }}>
