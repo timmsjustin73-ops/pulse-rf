@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, btnClass, fieldClass, ghostClass } from "@/components/shell";
 import { CATALOG, formatMhz, powerOptions } from "@/lib/catalog";
-import { listRequestsAcrossEvents, editRequestLine } from "@/lib/pulse.functions";
+import { listRequestsAcrossEvents, editRequestLine, deleteEvent } from "@/lib/pulse.functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/requests")({ component: RequestsRoute });
