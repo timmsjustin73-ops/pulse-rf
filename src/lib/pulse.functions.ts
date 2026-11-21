@@ -195,6 +195,7 @@ function toItems(requests: RequestRow[], zones: ZoneRow[], groups: { zone_id: st
       tuneStep: preset?.tuneStep,
       gaps: preset?.gaps,
       powerMw: r.power_mw == null ? 10 : num(r.power_mw),
+      densityMode: (r.density_mode ?? "") as "" | "shure-hd" | "senn-ld",
     };
   });
 }
@@ -1952,5 +1953,15 @@ export const addManager = createServerFn({ method: "POST" })
     const users = await sql<{ id: string }>`select id from "user" where email = ${data.email}`;
     if (!users[0]) throw new Error("No account with that email.");
     await sql`insert into event_members (event_id, user_id, role) values (${data.eventId}, ${users[0].id}, ${"manager"}) on conflict (event_id, user_id) do update set role = ${"manager"}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const setLineMode = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1), mode: z.string() }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update requests set density_mode = ${data.mode}, power_mw = ${data.mode ? 1 : 10} where id = ${data.requestId}`;
     return loadBundle(sql, data.eventId, context.userId);
   });

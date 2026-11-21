@@ -17,6 +17,8 @@ export type CoordItem = {
   locked: boolean;
   assigned: number | null;
   powerMw?: number;
+  /** shure-hd is 125 kHz at 1 mW. senn-ld is 300 kHz. */
+  densityMode?: "" | "shure-hd" | "senn-ld";
   /** MHz. Narrowband UHF radio mics use 0.005. */
   tuneStep?: number | null;
   gaps?: { min: number; max: number }[];
@@ -51,10 +53,16 @@ type Foot = {
 };
 
 const GUARD: Record<Spacing, number> = {
-  resilience: 0.2,
-  balanced: 0.075,
-  density: 0.025,
+  resilience: 0.35,
+  balanced: 0.2,
+  density: 0.125,
 };
+
+export function guardForItem(item: { densityMode?: string }, spacing: Spacing): number {
+  if (item.densityMode === "shure-hd") return 0.125;
+  if (item.densityMode === "senn-ld") return 0.3;
+  return GUARD[spacing];
+}
 
 const IMD: Record<Spacing, number> = {
   resilience: 0.1,
@@ -246,7 +254,7 @@ function legal(
   if (outsideRule(item, foot, rule)) return false;
   if (hitsGap(item, foot)) return false;
   if (hitsBlocker(foot, blockers)) return false;
-  if (hitsPlaced(foot, placed, GUARD[spacing])) return false;
+  if (hitsPlaced(foot, placed, guardForItem(item, spacing))) return false;
   if (item.mode === "carrier") {
     const carriers = placed
       .filter((p) => p.mode === "carrier" && together(foot, p))
