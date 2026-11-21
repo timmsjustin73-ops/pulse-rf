@@ -2001,6 +2001,32 @@ export const agentAct = createServerFn({ method: "POST" })
     const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
     if (!me[0]?.agent_enabled) throw new Error("The agent is not on for this account.");
     const words = data.text.toLowerCase();
+    if (words.includes("join") && /[a-z0-9]{4,}/i.test(data.text)) {
+      const code = (data.text.match(/[A-Za-z0-9]{4,8}/) ?? [""])[0].toUpperCase();
+      const rows = await sql<{ id: string }>`select id from events where join_code = ${code}`;
+      if (!rows[0]) return { reply: "No show with that code.", href: "" };
+      await sql`insert into event_members (event_id, user_id, role) values (${rows[0].id}, ${context.userId}, ${"tech"}) on conflict do nothing`;
+      return { reply: `Joined ${code}.`, href: `/events/${rows[0].id}` };
+    }
+    if (words.includes("area") || words.includes("zone")) {
+      if (!data.eventId) return { reply: "Open a show first.", href: "" };
+      const area = data.text.replace(/add|an|a|area|zone|called|named/gi, "").trim() || "Area";
+      await sql`insert into zones (id, event_id, name) values (${uid()}, ${data.eventId}, ${area})`;
+      return { reply: `Added area ${area}.`, href: "" };
+    }
+    if (words.includes("manager") && data.text.includes("@")) {
+      if (!data.eventId) return { reply: "Open a show first.", href: "" };
+      const email = data.text.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? "";
+      const users = await sql<{ id: string }>`select id from "user" where email = ${email}`;
+      if (!users[0]) return { reply: "No account with that email.", href: "" };
+      await sql`insert into event_members (event_id, user_id, role) values (${data.eventId}, ${users[0].id}, ${"manager"}) on conflict (event_id, user_id) do update set role = ${"manager"}`;
+      return { reply: `Added ${email} as a manager.`, href: "" };
+    }
+    if (words.includes("finalise") || words.includes("finalize")) {
+      if (!data.eventId) return { reply: "Open a show first.", href: "" };
+      await sql`update request_batches set status = ${"final"} where event_id = ${data.eventId} and status <> ${"final"}`;
+      return { reply: "Finalised the open requests.", href: "" };
+    }
     if (words.includes("event") || words.includes("show")) {
       const nameMatch = data.text.match(/call (?:the )?(?:event|show) ([a-z0-9 ]+)/i);
       const name = nameMatch?.[1]?.trim() || "New show";
