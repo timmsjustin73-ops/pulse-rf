@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell, btnClass, fieldClass } from "@/components/shell";
-import { listEvents } from "@/lib/pulse.functions";
+import { addScan, listEvents } from "@/lib/pulse.functions";
 
 export const Route = createFileRoute("/scan")({ component: ScanRoute });
 
@@ -34,6 +34,10 @@ function ScanPage() {
         void serial.requestPort().then((p) => p.open({ baudRate: 500000 })).then(() => setPort(`${spot} connected`));
       }}>Connect scanner</button>
       {port && <p className="text-sm text-muted">{port}</p>}
+      <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget).get("body"); if (typeof body === "string" && eventId) void addScan({ data: { eventId, label: spot || "Scanner", body, threshold: -70 } }).then(() => setPort("Trace posted")); }}>
+        <textarea name="body" className={fieldClass + " h-32"} placeholder="520.000,-62" />
+        <button className={btnClass} type="submit">Post trace</button>
+      </form>
     </div>
   );
 }

@@ -409,6 +409,7 @@ function Plot({
 }) {
   const [showIm, setShowIm] = useState(false);
   const [focusId, setFocusId] = useState("");
+  const [orders, setOrders] = useState<number[]>([2, 3, 5]);
   const [viewMin, setViewMin] = useState("");
   const [viewMax, setViewMax] = useState("");
   const strips = useMemo(() => bands(data), [data]);
@@ -450,9 +451,12 @@ function Plot({
           <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
             <label className="text-xs text-muted">Start <input className={fieldClass + " ml-1 w-24"} inputMode="decimal" value={viewMin} placeholder={String(Math.floor(autoLo))} onChange={(e) => setViewMin(e.target.value)} /></label>
             <label className="text-xs text-muted">End <input className={fieldClass + " ml-1 w-24"} inputMode="decimal" value={viewMax} placeholder={String(Math.ceil(autoHi))} onChange={(e) => setViewMax(e.target.value)} /></label>
+            {[2, 3, 5].map((order) => (
+              <button key={order} type="button" className={ghostClass} onClick={() => setOrders((cur) => cur.includes(order) ? cur.filter((n) => n !== order) : [...cur, order])}>{order}{orders.includes(order) ? " on" : " off"}</button>
+            ))}
             <button type="button" className={ghostClass} onClick={() => setShowIm((v) => !v)}>{showIm ? "Hide intermod" : "Show intermod"}</button>
           </div>
-          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodProducts(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz })), focusId || undefined).map((h) => ({ mhz: h.mhz, order: h.order })) : []} />
+          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodProducts(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz })), focusId || undefined).filter((h) => orders.includes(h.order)).map((h) => ({ mhz: h.mhz, order: h.order })) : []} />
         </div>
       )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
@@ -552,6 +556,8 @@ function Plot({
                         const offer = near?.assigned_mhz ? (near.assigned_mhz + 0.4).toFixed(3) : ((r.band_min + r.band_max) / 2).toFixed(3);
                         if (window.confirm(`Offer ${offer} MHz?`)) void run("offer", () => updateRequest({ data: { eventId: data.event.id, requestId: r.id, locked: true, assigned: Number(offer), priority: (r.priority === "critical" || r.priority === "high" || r.priority === "low" ? r.priority : "normal"), zoneId: r.zone_id ?? data.zones[0]?.id ?? "" } }));
                       }}>Suggest</button>
+                      <button type="button" className="underline" onClick={() => { const note = window.prompt("Private note") ?? ""; void run("note", () => setPrivateNote({ data: { eventId: data.event.id, requestId: r.id, note } })); }}>Note</button>
+                      <button type="button" className="underline" onClick={() => { if (r.assigned_mhz && r.zone_id) void run("hold", () => addHold({ data: { eventId: data.event.id, zoneId: r.zone_id!, mhz: r.assigned_mhz!, label: r.label } })); }}>Hold</button>
                     </span>
                   )}
                   {r.spare ? <span className="ml-2 text-xs text-muted">spare</span> : null}
@@ -702,6 +708,7 @@ export function MyRequests({
   const [power, setPower] = useState(10);
   const [showIm, setShowIm] = useState(false);
   const [focusId, setFocusId] = useState("");
+  const [orders, setOrders] = useState<number[]>([2, 3, 5]);
   const [preferred, setPreferred] = useState("");
   const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number; preferred?: number }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -837,7 +844,7 @@ export function MyRequests({
             </div>
             <ul className="mt-2 space-y-1 text-muted">
               {data.requests.filter((r) => r.batch_id === b.id).map((r) => (
-                <li key={r.id}>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}</li>
+                <li key={r.id}>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}{r.flagged_mhz ? ` · moved from ${r.flagged_mhz}` : ""}</li>
               ))}
             </ul>
             <div className="mt-2 flex gap-2">
