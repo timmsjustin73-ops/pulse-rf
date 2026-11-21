@@ -740,12 +740,26 @@ export function MyRequests({
             </select>
           </label>
           <label className="text-sm">Manufacturer
-            <select className={fieldClass + " mt-1"} value={maker} onChange={(e) => { setMaker(e.target.value); setMake(""); setBand(""); }}>
+            <select className={fieldClass + " mt-1"} value={maker} onChange={(e) => {
+              const next = e.target.value;
+              setMaker(next);
+              const firstMake = devices.find((d) => d.manufacturer === next)?.series ?? "";
+              setMake(firstMake);
+              const firstBand = devices.find((d) => d.manufacturer === next && d.series === firstMake);
+              setBand(firstBand?.key ?? "");
+              if (firstBand) setPower(defaultPower(firstBand.power));
+            }}>
               {makers.map((m) => <option key={m}>{m}</option>)}
             </select>
           </label>
           <label className="text-sm">Make
-            <select className={fieldClass + " mt-1"} value={make} onChange={(e) => { setMake(e.target.value); setBand(""); }}>
+            <select className={fieldClass + " mt-1"} value={make} onChange={(e) => {
+              const next = e.target.value;
+              setMake(next);
+              const firstBand = devices.find((d) => d.manufacturer === maker && d.series === next);
+              setBand(firstBand?.key ?? "");
+              if (firstBand) setPower(defaultPower(firstBand.power));
+            }}>
               {series.map((s) => <option key={s}>{s}</option>)}
             </select>
           </label>
