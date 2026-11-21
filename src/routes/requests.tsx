@@ -74,7 +74,10 @@ function RequestsPage() {
                     onClick={() => setOpen((cur) => ({ ...cur, [key]: !cur[key] }))}
                   >
                     <span>{event.name}</span>
-                    <span className="text-muted">{expanded ? "−" : "+"}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs text-bad" onClick={(e) => { e.stopPropagation(); if (window.confirm("Remove this event?")) void deleteEvent({ data: { eventId } }).then(() => window.location.reload()); }}>Remove</span>
+                      <span className="text-muted">{expanded ? "−" : "+"}</span>
+                    </span>
                   </button>
                   {expanded && (
                     <div className="ml-3 space-y-2 border-l border-border pl-3">
