@@ -1995,7 +1995,7 @@ export const agentAdd = createServerFn({ method: "POST" })
 
 export const agentAct = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ page: z.string(), eventId: z.string().optional().default(""), text: z.string().min(2).max(200) }))
+  .validator(z.object({ page: z.string(), eventId: z.string().optional().default(""), text: z.string().min(2).max(200), context: z.string().optional().default("") }))
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
@@ -2011,5 +2011,6 @@ export const agentAct = createServerFn({ method: "POST" })
         ?? CATALOG.find((d) => words.includes(d.series.toLowerCase()));
       if (hit) return { reply: `On ${data.page}: matched ${hit.name}. Band ${hit.band}. Add it from Requests.`, href: "" };
     }
-    return { reply: `On ${data.page}: I can create a show, or match a series and band on a show.`, href: "" };
+    if (data.context) return { reply: `On ${data.page}: ${data.context.slice(0, 400)}`, href: "" };
+    return { reply: `On ${data.page}: nothing loaded on this page yet.`, href: "" };
   });
