@@ -1757,3 +1757,23 @@ export const inviteToCompany = createServerFn({ method: "POST" })
     await sql`insert into companies (id, name) select ${"invite-" + code}, ${"Invite " + code} where not exists (select 1 from companies where id = ${"invite-" + code})`;
     return { joined: false as const, code };
   });
+
+export const setUserAccess = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    userId: z.string().min(1),
+    admin: z.boolean(),
+    companyId: z.string().optional().default(""),
+    owner: z.boolean().optional().default(false),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if (!(await isPlatformAdmin(sql, context.userId))) throw new Error("Admin only.");
+    if (data.admin) await sql`insert into platform_admins (user_id) values (${data.userId}) on conflict do nothing`;
+    else await sql`delete from platform_admins where user_id = ${data.userId}`;
+    if (data.companyId) {
+      await sql`delete from company_members where user_id = ${data.userId}`;
+      await sql`insert into company_members (company_id, user_id, owner) values (${data.companyId}, ${data.userId}, ${data.owner ?? false})`;
+    }
+    return { ok: true as const };
+  });
