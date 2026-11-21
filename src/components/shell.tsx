@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           Pulse RF
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:px-3">
-          <Side to="/" label="Home" active={path === "/"} />
+          <Side to="/site" label="Home" active={path === "/site"} />
           <Side to="/" label="Events" active={path === "/"} />
           <Side to="/requests" label="My Requests" active={path.startsWith("/requests")} />
           <Side to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate" | "/admin" | "/permissions" | "/scan" | "/company"; label: string; active: boolean }) {
+function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate" | "/admin" | "/permissions" | "/scan" | "/company" | "/site"; label: string; active: boolean }) {
   return (
     <Link to={to} className={"rounded-lg px-3 py-2 text-sm " + (active ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg")}>
       {label}
