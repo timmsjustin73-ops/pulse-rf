@@ -1677,3 +1677,83 @@ export const listActivity = createServerFn({ method: "GET" })
       limit 40
     `;
   });
+
+export const listPeople = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    if (!(await isPlatformAdmin(sql, context.userId))) throw new Error("Admin only.");
+    const users = await sql<{ id: string; name: string | null; email: string | null }>`select id, name, email from "user" order by name`;
+    const companies = await sql<{ id: string; name: string }>`select id, name from companies order by name`;
+    const members = await sql<{ company_id: string; user_id: string; owner: boolean }>`select company_id, user_id, owner from company_members`;
+    return { users, companies, members };
+  });
+
+export const createCompany = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ name: z.string().trim().min(1).max(80) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if (!(await isPlatformAdmin(sql, context.userId))) throw new Error("Admin only.");
+    const id = uid();
+    await sql`insert into companies (id, name) values (${id}, ${data.name})`;
+    return { id };
+  });
+
+export const addToCompany = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ companyId: z.string().min(1), userId: z.string().min(1), owner: z.boolean().optional().default(false) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if (!(await isPlatformAdmin(sql, context.userId))) throw new Error("Admin only.");
+    await sql`
+      insert into company_members (company_id, user_id, owner)
+      values (${data.companyId}, ${data.userId}, ${data.owner ?? false})
+      on conflict (company_id, user_id) do update set owner = ${data.owner ?? false}
+    `;
+    return { ok: true as const };
+  });
+
+export const swapLines = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), a: z.string().min(1), b: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const rows = await sql<{ id: string; assigned_mhz: number | null }>`select id, assigned_mhz from requests where event_id = ${data.eventId} and id in (${data.a}, ${data.b})`;
+    const left = rows.find((r) => r.id === data.a);
+    const right = rows.find((r) => r.id === data.b);
+    if (!left || !right) throw new Error("Both lines must be on this show.");
+    await sql`update requests set assigned_mhz = ${right.assigned_mhz} where id = ${left.id}`;
+    await sql`update requests set assigned_mhz = ${left.assigned_mhz} where id = ${right.id}`;
+    await logActivity(sql, data.eventId, context.userId, `Swapped ${data.a} and ${data.b}`);
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const setPrivateNote = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1), note: z.string().max(240) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update requests set private_note = ${data.note} where id = ${data.requestId}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const inviteToCompany = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ companyId: z.string().min(1), email: z.string().email() }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const admin = await isPlatformAdmin(sql, context.userId);
+    const owner = await sql<{ owner: boolean }>`select owner from company_members where company_id = ${data.companyId} and user_id = ${context.userId}`;
+    if (!admin && !owner[0]?.owner) throw new Error("Only an owner or admin can add people.");
+    const users = await sql<{ id: string }>`select id from "user" where email = ${data.email}`;
+    if (users[0]) {
+      await sql`insert into company_members (company_id, user_id, owner) values (${data.companyId}, ${users[0].id}, ${false}) on conflict (company_id, user_id) do nothing`;
+      return { joined: true as const, code: "" };
+    }
+    const code = uid().slice(0, 6).toUpperCase();
+    await sql`insert into companies (id, name) select ${"invite-" + code}, ${"Invite " + code} where not exists (select 1 from companies where id = ${"invite-" + code})`;
+    return { joined: false as const, code };
+  });

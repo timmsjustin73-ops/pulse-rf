@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell, btnClass, fieldClass } from "@/components/shell";
-import { addToCompany, createCompany, listEvents, listPeople } from "@/lib/pulse.functions";
+import { addToCompany, createCompany, inviteToCompany, listEvents, listPeople } from "@/lib/pulse.functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { Link } from "@tanstack/react-router";
 
@@ -43,6 +43,10 @@ function AdminPage() {
             <div key={c.id} className="rounded-xl border border-border p-3 text-sm">
               <p className="font-medium">{c.name}</p>
               <p className="text-muted">{people.members.filter((m) => m.company_id === c.id).length} people</p>
+              <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); const email = new FormData(e.currentTarget).get("email"); if (typeof email === "string") void inviteToCompany({ data: { companyId: c.id, email } }).then((r) => window.alert(r.joined ? "Added" : `Code ${r.code}`)); }}>
+                <input name="email" className={fieldClass} placeholder="Email" />
+                <button className={btnClass} type="submit">Add</button>
+              </form>
             </div>
           ))}
         </div>

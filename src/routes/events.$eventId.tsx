@@ -58,6 +58,8 @@ import {
   copyShow,
   makeGuestCode,
   listActivity,
+  swapLines,
+  setPrivateNote,
 } from "@/lib/pulse.functions";
 import QRCode from "qrcode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -510,6 +512,13 @@ function Plot({
                 </td>
                 <td className="px-3 py-2 font-mono tabular-nums text-primary">
                   {formatMhz(r.assigned_mhz)}
+                  {manager && (
+                    <span className="ml-2 space-x-1 text-xs">
+                      <button type="button" className="underline" onClick={() => run("allow", () => reviewLine({ data: { eventId: data.event.id, requestId: r.id, status: "allowed", note: "" } }))}>Allow</button>
+                      <button type="button" className="underline" onClick={() => { const note = window.prompt("Why denied?") ?? ""; void run("deny", () => reviewLine({ data: { eventId: data.event.id, requestId: r.id, status: "denied", note } })); }}>Deny</button>
+                      <button type="button" className="underline" onClick={() => { const other = window.prompt("Line id to swap with"); if (other) void run("swap", () => swapLines({ data: { eventId: data.event.id, a: r.id, b: other } })); }}>Swap</button>
+                    </span>
+                  )}
                   {r.spare ? <span className="ml-2 text-xs text-muted">spare</span> : null}
                 </td>
                 <td className="px-3 py-2">
