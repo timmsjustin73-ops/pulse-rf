@@ -14,7 +14,7 @@ function transport() {
 
 export async function sendMail(to: string, subject: string, text: string): Promise<boolean> {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD || !to) return false;
-  await transport().sendMail({ from: process.env.SMTP_USER, to, subject, text });
+  await transport().sendMail({ from: `RF Pulse Jesus <${process.env.SMTP_USER}>`, to, subject, text });
   return true;
 }
 
