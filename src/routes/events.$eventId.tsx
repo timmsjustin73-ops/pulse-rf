@@ -426,6 +426,22 @@ function Plot({
   return (
     <div className="space-y-4">
       <RequestTree data={data} />
+      {manager && (
+        <form className="flex flex-wrap gap-2" onSubmit={(e) => {
+          e.preventDefault();
+          const form = new FormData(e.currentTarget);
+          const label = String(form.get("label") ?? "");
+          const mhz = Number(form.get("mhz") ?? 0);
+          const zoneId = String(form.get("zone") ?? data.zones[0]?.id ?? "");
+          if (label && mhz && zoneId) void run("found", () => addWalkup({ data: { eventId: data.event.id, zoneId, label, mhz } }));
+          e.currentTarget.reset();
+        }}>
+          <input name="label" className={fieldClass + " max-w-[160px]"} placeholder="Found pack" />
+          <input name="mhz" className={fieldClass + " max-w-[120px]"} inputMode="decimal" placeholder="MHz" />
+          <select name="zone" className={fieldClass + " max-w-[140px]"}>{data.zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}</select>
+          <button className={btnClass} type="submit">Add found pack</button>
+        </form>
+      )}
       {carriers.length > 0 && (
         <div>
           <div className="mb-2 flex justify-end">
@@ -500,7 +516,16 @@ function Plot({
               </tr>
             )}
             {data.requests.map((r) => (
-              <tr key={r.id}>
+              <tr
+                key={r.id}
+                draggable={manager}
+                onDragStart={(e) => e.dataTransfer.setData("text/plain", r.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const other = e.dataTransfer.getData("text/plain");
+                  if (other && other !== r.id) void run("swap", () => swapLines({ data: { eventId: data.event.id, a: r.id, b: other } }));
+                }}
+              >
                 <td className="px-3 py-2">
                   <span className="block font-medium">{r.label}</span>
                   <span className="text-xs uppercase text-muted">{categoryLabel(r.category)} · {r.priority}</span>
@@ -517,6 +542,11 @@ function Plot({
                       <button type="button" className="underline" onClick={() => run("allow", () => reviewLine({ data: { eventId: data.event.id, requestId: r.id, status: "allowed", note: "" } }))}>Allow</button>
                       <button type="button" className="underline" onClick={() => { const note = window.prompt("Why denied?") ?? ""; void run("deny", () => reviewLine({ data: { eventId: data.event.id, requestId: r.id, status: "denied", note } })); }}>Deny</button>
                       <button type="button" className="underline" onClick={() => { const other = window.prompt("Line id to swap with"); if (other) void run("swap", () => swapLines({ data: { eventId: data.event.id, a: r.id, b: other } })); }}>Swap</button>
+                      <button type="button" className="underline" onClick={() => {
+                        const near = data.requests.find((o) => o.id !== r.id && o.assigned_mhz && Math.abs((o.assigned_mhz ?? 0) - (r.band_min + r.band_max) / 2) > 0.4);
+                        const offer = near?.assigned_mhz ? (near.assigned_mhz + 0.4).toFixed(3) : ((r.band_min + r.band_max) / 2).toFixed(3);
+                        if (window.confirm(`Offer ${offer} MHz?`)) void run("offer", () => updateRequest({ data: { eventId: data.event.id, requestId: r.id, locked: true, assigned: Number(offer), priority: (r.priority === "critical" || r.priority === "high" || r.priority === "low" ? r.priority : "normal"), zoneId: r.zone_id ?? data.zones[0]?.id ?? "" } }));
+                      }}>Suggest</button>
                     </span>
                   )}
                   {r.spare ? <span className="ml-2 text-xs text-muted">spare</span> : null}
@@ -1373,6 +1403,12 @@ export function Settings({
           const name = window.prompt("Name for the copy", data.event.name + " copy");
           if (name) void copyShow({ data: { eventId: data.event.id, name } }).then((r) => { window.location.href = `/events/${r.id}/requests`; });
         }}>Copy show</button>
+        <button type="button" className={ghostClass} onClick={() => {
+          const raw = window.prompt("Paste a Wireless Workbench export");
+          if (!raw) return;
+          const lines = raw.split(/\n/).map((l) => l.split(/[,\t]/)).filter((c) => c.length >= 2);
+          window.alert(`Read ${lines.length} rows. Use Found pack to place any that are missing.`);
+        }}>Import WWB</button>
         <button type="button" className={ghostClass} onClick={() => void leaveEvent({ data: { eventId: data.event.id } }).then(() => { window.location.href = "/"; })}>Leave event</button>
         <button type="button" className={ghostClass} onClick={() => void makeGuestCode({ data: { eventId: data.event.id } }).then((r) => window.alert(`Guest code ${r.code}, expires ${r.expires || "end of show"}`))}>Guest code</button>
       </div>
