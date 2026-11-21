@@ -408,17 +408,19 @@ function Plot({
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
   const [showIm, setShowIm] = useState(false);
+  const [viewMin, setViewMin] = useState("");
+  const [viewMax, setViewMax] = useState("");
   const strips = useMemo(() => bands(data), [data]);
   const carriers = data.requests
     .filter((r) => r.assigned_mhz != null)
     .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number, category: r.category }));
   const marks = data.scans.flatMap((s) => s.marks);
-  const lo = Math.min(
+  const autoLo = Math.min(
     470,
     ...carriers.map((c) => c.mhz),
     ...data.requests.map((r) => r.band_min),
   );
-  const hi = Math.max(
+  const autoHi = Math.max(
     694,
     ...carriers.map((c) => c.mhz),
     ...data.requests.map((r) => r.band_max),
@@ -444,10 +446,12 @@ function Plot({
       )}
       {carriers.length > 0 && (
         <div>
-          <div className="mb-2 flex justify-end">
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+            <label className="text-xs text-muted">Start <input className={fieldClass + " ml-1 w-24"} inputMode="decimal" value={viewMin} placeholder={String(Math.floor(autoLo))} onChange={(e) => setViewMin(e.target.value)} /></label>
+            <label className="text-xs text-muted">End <input className={fieldClass + " ml-1 w-24"} inputMode="decimal" value={viewMax} placeholder={String(Math.ceil(autoHi))} onChange={(e) => setViewMax(e.target.value)} /></label>
             <button type="button" className={ghostClass} onClick={() => setShowIm((v) => !v)}>{showIm ? "Hide intermod" : "Show intermod"}</button>
           </div>
-          <SpectrumChart carriers={carriers} marks={marks} min={Math.floor(lo)} max={Math.ceil(hi)} intermods={showIm ? intermodHits(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz, powerMw: 10 }))).map((h) => ({ mhz: h.product, order: h.order })) : []} />
+          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodHits(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz, powerMw: 10 }))).map((h) => ({ mhz: h.product, order: h.order })) : []} />
         </div>
       )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
