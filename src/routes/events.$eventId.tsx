@@ -53,6 +53,7 @@ import {
   beat,
   updateBatch,
   reviewLine,
+  finaliseBatch,
   leaveEvent,
   removeMember,
   copyShow,
@@ -557,6 +558,7 @@ const trace = data.scans[0]?.trace ?? [];
                         const offer = near?.assigned_mhz ? (near.assigned_mhz + 0.4).toFixed(3) : ((r.band_min + r.band_max) / 2).toFixed(3);
                         if (window.confirm(`Offer ${offer} MHz?`)) void run("offer", () => updateRequest({ data: { eventId: data.event.id, requestId: r.id, locked: true, assigned: Number(offer), priority: (r.priority === "critical" || r.priority === "high" || r.priority === "low" ? r.priority : "normal"), zoneId: r.zone_id ?? data.zones[0]?.id ?? "" } }));
                       }}>Suggest</button>
+                      <button type="button" className="underline" onClick={() => { if (r.batch_id) void run("final", () => finaliseBatch({ data: { eventId: data.event.id, batchId: r.batch_id! } })); }}>Finalise</button>
                       <button type="button" className="underline" onClick={() => { const note = window.prompt("Private note") ?? ""; void run("note", () => setPrivateNote({ data: { eventId: data.event.id, requestId: r.id, note } })); }}>Note</button>
                       <button type="button" className="underline" onClick={() => { if (r.assigned_mhz && r.zone_id) void run("hold", () => addHold({ data: { eventId: data.event.id, zoneId: r.zone_id!, mhz: r.assigned_mhz!, label: r.label } })); }}>Hold</button>
                     </span>

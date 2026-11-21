@@ -1472,7 +1472,7 @@ export const updateBatch = createServerFn({ method: "POST" })
     return loadBundle(sql, data.eventId, context.userId);
   });
 
-export const lineHistory = createServerFn({ method: "GET" })
+export const readLineHistory = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator(z.object({ eventId: z.string().min(1), requestId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
@@ -1783,4 +1783,15 @@ export const setUserAccess = createServerFn({ method: "POST" })
       await sql`insert into company_members (company_id, user_id, owner) values (${data.companyId}, ${data.userId}, ${data.owner ?? false})`;
     }
     return { ok: true as const };
+  });
+
+export const finaliseBatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), batchId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update request_batches set status = ${"final"} where id = ${data.batchId}`;
+    await logActivity(sql, data.eventId, context.userId, `Finalised request ${data.batchId}`);
+    return loadBundle(sql, data.eventId, context.userId);
   });

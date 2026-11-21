@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CompanyRouteImport } from './routes/company'
 import { Route as CoordinateRouteImport } from './routes/coordinate'
+import { Route as DayRouteImport } from './routes/day'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PermissionsRouteImport } from './routes/permissions'
@@ -50,6 +51,11 @@ const CompanyRoute = CompanyRouteImport.update({
 const CoordinateRoute = CoordinateRouteImport.update({
   id: '/coordinate',
   path: '/coordinate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DayRoute = DayRouteImport.update({
+  id: '/day',
+  path: '/day',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryRoute = LibraryRouteImport.update({
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/company': typeof CompanyRoute
   '/coordinate': typeof CoordinateRoute
+  '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
@@ -172,6 +179,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/company': typeof CompanyRoute
   '/coordinate': typeof CoordinateRoute
+  '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
@@ -196,6 +204,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/company': typeof CompanyRoute
   '/coordinate': typeof CoordinateRoute
+  '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/company'
     | '/coordinate'
+    | '/day'
     | '/library'
     | '/login'
     | '/permissions'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/company'
     | '/coordinate'
+    | '/day'
     | '/library'
     | '/login'
     | '/permissions'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/company'
     | '/coordinate'
+    | '/day'
     | '/library'
     | '/login'
     | '/permissions'
@@ -294,6 +306,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CompanyRoute: typeof CompanyRoute
   CoordinateRoute: typeof CoordinateRoute
+  DayRoute: typeof DayRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
   PermissionsRoute: typeof PermissionsRoute
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/coordinate'
       fullPath: '/coordinate'
       preLoaderRoute: typeof CoordinateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/day': {
+      id: '/day'
+      path: '/day'
+      fullPath: '/day'
+      preLoaderRoute: typeof DayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library': {
@@ -497,6 +517,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CompanyRoute: CompanyRoute,
   CoordinateRoute: CoordinateRoute,
+  DayRoute: DayRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
   PermissionsRoute: PermissionsRoute,
