@@ -34,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Side to="/library" label="My Devices" active={path.startsWith("/library")} />
           <Side to="/scan" label="Scanner" active={path.startsWith("/scan")} />
           <Side to="/company" label="Company" active={path.startsWith("/company")} />
+          <Side to="/notify" label="Updates" active={path.startsWith("/notify")} />
           {user?.primaryEmail === "justin@jtlive.tech" && <Side to="/admin" label="Admin" active={path.startsWith("/admin")} />}
                   </nav>
         <div className="hidden items-center gap-2 px-4 py-4 lg:flex">
@@ -55,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate" | "/admin" | "/permissions" | "/scan" | "/company" | "/site"; label: string; active: boolean }) {
+function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate" | "/admin" | "/permissions" | "/scan" | "/company" | "/site" | "/notify"; label: string; active: boolean }) {
   return (
     <Link to={to} className={"rounded-lg px-3 py-2 text-sm " + (active ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg")}>
       {label}

@@ -16,6 +16,7 @@ import { Route as CoordinateRouteImport } from './routes/coordinate'
 import { Route as DayRouteImport } from './routes/day'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotifyRouteImport } from './routes/notify'
 import { Route as PermissionsRouteImport } from './routes/permissions'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as ScanRouteImport } from './routes/scan'
@@ -66,6 +67,11 @@ const LibraryRoute = LibraryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotifyRoute = NotifyRouteImport.update({
+  id: '/notify',
+  path: '/notify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PermissionsRoute = PermissionsRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/notify': typeof NotifyRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/notify': typeof NotifyRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/day': typeof DayRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/notify': typeof NotifyRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/scan': typeof ScanRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/day'
     | '/library'
     | '/login'
+    | '/notify'
     | '/permissions'
     | '/requests'
     | '/scan'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/day'
     | '/library'
     | '/login'
+    | '/notify'
     | '/permissions'
     | '/requests'
     | '/scan'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/day'
     | '/library'
     | '/login'
+    | '/notify'
     | '/permissions'
     | '/requests'
     | '/scan'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   DayRoute: typeof DayRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
+  NotifyRoute: typeof NotifyRoute
   PermissionsRoute: typeof PermissionsRoute
   RequestsRoute: typeof RequestsRoute
   ScanRoute: typeof ScanRoute
@@ -367,6 +380,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notify': {
+      id: '/notify'
+      path: '/notify'
+      fullPath: '/notify'
+      preLoaderRoute: typeof NotifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/permissions': {
@@ -520,6 +540,7 @@ const rootRouteChildren: RootRouteChildren = {
   DayRoute: DayRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
+  NotifyRoute: NotifyRoute,
   PermissionsRoute: PermissionsRoute,
   RequestsRoute: RequestsRoute,
   ScanRoute: ScanRoute,

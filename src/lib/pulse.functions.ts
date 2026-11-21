@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { sendMail } from "@/lib/mail";
 import { z } from "zod";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql, type Sql } from "@/lib/db";
@@ -1794,6 +1795,12 @@ export const finaliseBatch = createServerFn({ method: "POST" })
     await requireAccess(sql, data.eventId, context.userId, "manager");
     await sql`update request_batches set status = ${"final"} where id = ${data.batchId}`;
     await logActivity(sql, data.eventId, context.userId, `Finalised request ${data.batchId}`);
+    const people = await sql<{ email: string | null; notify_email: boolean }>`
+      select email, notify_email from "user" where id in (select created_by from requests where batch_id = ${data.batchId})
+    `;
+    for (const person of people) {
+      if (person.notify_email && person.email) await sendMail(person.email, "Pulse RF request finalised", "Your request has been finalised. Open My Requests for the frequencies.");
+    }
     return loadBundle(sql, data.eventId, context.userId);
   });
 
@@ -1804,3 +1811,36 @@ function acmaBlockers(notes: string): { min: number; max: number; label: string 
   if (city.includes("brisbane")) return [{ min: 599, max: 606, label: "TV Brisbane" }];
   return [];
 }
+
+export const saveNotify = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    email: z.boolean(),
+    whatsapp: z.boolean(),
+    phone: z.string().max(20).optional().default(""),
+    quietFrom: z.string().optional().default("22:00"),
+    quietTo: z.string().optional().default("07:00"),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`
+      update "user" set
+        notify_email = ${data.email},
+        notify_whatsapp = ${data.whatsapp},
+        phone = ${data.phone ?? ""},
+        quiet_from = ${data.quietFrom ?? "22:00"},
+        quiet_to = ${data.quietTo ?? "07:00"}
+      where id = ${context.userId}
+    `;
+    return { ok: true as const };
+  });
+
+export const myNotify = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const rows = await sql<{ notify_email: boolean; notify_whatsapp: boolean; phone: string; quiet_from: string; quiet_to: string; email: string | null }>`
+      select notify_email, notify_whatsapp, phone, quiet_from, quiet_to, email from "user" where id = ${context.userId}
+    `;
+    return rows[0] ?? { notify_email: true, notify_whatsapp: false, phone: "", quiet_from: "22:00", quiet_to: "07:00", email: null };
+  });
