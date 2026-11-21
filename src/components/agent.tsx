@@ -1,24 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fieldClass } from "@/components/shell";
-import { agentAdd } from "@/lib/pulse.functions";
+import { agentAdd, agentEnabled } from "@/lib/pulse.functions";
 
-export function AgentPanel({ eventId }: { eventId: string }) {
+export function AgentBadge({ eventId, page }: { eventId?: string; page: string }) {
+  const [on, setOn] = useState(false);
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [reply, setReply] = useState("");
+  useEffect(() => { void agentEnabled().then((r) => setOn(r.on)); }, []);
+  if (!on) return null;
   return (
-    <form className="rounded-xl border border-border p-3 text-sm" onSubmit={(e) => {
-      e.preventDefault();
-      setReply("Looking…");
-      void agentAdd({ data: { eventId, text } }).then((r) => {
-        setReply(r.found ? `Matched ${r.name}. Band ${r.band}. Power ${r.power}. Add it from Requests to place it.` : "No match. Try the series and the band, for example ULX-D G50.");
-      }).catch((err: unknown) => setReply(err instanceof Error ? err.message : "Failed"));
-    }}>
-      <p className="mb-2 font-medium">Agent</p>
-      <div className="flex gap-2">
-        <input className={fieldClass} value={text} onChange={(e) => setText(e.target.value)} placeholder="ULX-D G50 lead vocal" />
-        <button className="rounded-lg bg-primary px-3 text-primary-fg" type="submit">Ask</button>
-      </div>
-      {reply && <p className="mt-2 text-muted">{reply}</p>}
-    </form>
+    <>
+      <button type="button" className="fixed bottom-4 right-4 z-40 rounded-full bg-primary px-3 py-2 text-sm text-primary-fg shadow" onClick={() => setOpen((v) => !v)}>Agent</button>
+      {open && (
+        <form className="fixed bottom-16 right-4 z-40 w-72 rounded-xl border border-border bg-card p-3 text-sm shadow" onSubmit={(e) => {
+          e.preventDefault();
+          if (!eventId) { setReply("Open a show to add a device."); return; }
+          setReply("Looking…");
+          void agentAdd({ data: { eventId, text } }).then((r) => {
+            setReply(r.found ? `On ${page}: matched ${r.name}. Band ${r.band}.` : `On ${page}: no match. Try the series and the band.`);
+          }).catch((err: unknown) => setReply(err instanceof Error ? err.message : "Failed"));
+        }}>
+          <p className="mb-2 font-medium">Agent · {page}</p>
+          <input className={fieldClass} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask about this page" />
+          <button className="mt-2 rounded-lg bg-primary px-3 py-1 text-primary-fg" type="submit">Ask</button>
+          {reply && <p className="mt-2 text-muted">{reply}</p>}
+        </form>
+      )}
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Radio } from "lucide-react";
 import { RedirectToSignIn, UserButton } from "@/lib/auth/gates";
+import { AgentBadge } from "@/components/agent";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { listNotifications, markNotificationsRead } from "@/lib/pulse.functions";
 
@@ -51,7 +52,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="px-4 py-6 lg:px-8">{children}</main>
-      </div>
+      <AgentBadge page={title} />
+        </div>
     </div>
   );
 }
