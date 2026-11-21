@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fieldClass } from "@/components/shell";
-import { agentAdd, agentEnabled } from "@/lib/pulse.functions";
+import { agentAct, agentEnabled } from "@/lib/pulse.functions";
 
 export function AgentBadge({ eventId, page }: { eventId?: string; page: string }) {
   const [on, setOn] = useState(false);
@@ -15,10 +15,10 @@ export function AgentBadge({ eventId, page }: { eventId?: string; page: string }
       {open && (
         <form className="fixed bottom-16 right-4 z-40 w-72 rounded-xl border border-border bg-card p-3 text-sm shadow" onSubmit={(e) => {
           e.preventDefault();
-          if (!eventId) { setReply("Open a show to add a device."); return; }
-          setReply("Looking…");
-          void agentAdd({ data: { eventId, text } }).then((r) => {
-            setReply(r.found ? `On ${page}: matched ${r.name}. Band ${r.band}.` : `On ${page}: no match. Try the series and the band.`);
+          setReply("Working…");
+          void agentAct({ data: { page, eventId: eventId ?? "", text } }).then((r) => {
+            setReply(r.reply);
+            if (r.href) window.location.href = r.href;
           }).catch((err: unknown) => setReply(err instanceof Error ? err.message : "Failed"));
         }}>
           <p className="mb-2 font-medium">Agent · {page}</p>

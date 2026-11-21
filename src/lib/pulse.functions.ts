@@ -1992,3 +1992,24 @@ export const agentAdd = createServerFn({ method: "POST" })
     if (!hit) return { found: false as const, name: "" };
     return { found: true as const, name: hit.name, key: hit.key, series: hit.series, band: hit.band, power: hit.power };
   });
+
+export const agentAct = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ page: z.string(), eventId: z.string().optional().default(""), text: z.string().min(2).max(200) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
+    if (!me[0]?.agent_enabled) throw new Error("The agent is not on for this account.");
+    const words = data.text.toLowerCase();
+    if (words.includes("event") || words.includes("show")) {
+      const name = data.text.replace(/build|create|new|a|an|event|show|for|me|next|please/gi, "").trim() || "New show";
+      const id = await insertEvent(sql, context.userId, { name, venue: "", city: "", region: "AU", spacing: "balanced", startsOn: "", endsOn: "", notes: "Created by the agent." });
+      return { reply: `Created ${name}.`, href: `/events/${id}` };
+    }
+    if (data.eventId) {
+      const hit = CATALOG.find((d) => words.includes(d.series.toLowerCase()) && words.includes(d.band.toLowerCase()))
+        ?? CATALOG.find((d) => words.includes(d.series.toLowerCase()));
+      if (hit) return { reply: `On ${data.page}: matched ${hit.name}. Band ${hit.band}. Add it from Requests.`, href: "" };
+    }
+    return { reply: `On ${data.page}: I can create a show, or match a series and band on a show.`, href: "" };
+  });
