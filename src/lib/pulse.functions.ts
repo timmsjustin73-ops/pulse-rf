@@ -10,6 +10,7 @@ import {
   parseClock,
   type Role,
   type Blocker,
+  specFor,
 } from "@/lib/catalog";
 import { audit, coordinate, intermodHits, parseScan, snapCarrier, spectrumRuleFor, tuneStepOf, type BandBlock, type CoordItem } from "@/lib/coord";
 
@@ -197,6 +198,8 @@ function toItems(requests: RequestRow[], zones: ZoneRow[], groups: { zone_id: st
       gaps: preset?.gaps,
       powerMw: r.power_mw == null ? 10 : num(r.power_mw),
       densityMode: (r.density_mode ?? "") as "" | "shure-hd" | "senn-ld",
+      seriesSpacing: specFor(preset?.series ?? "").spacing,
+      seriesDense: specFor(preset?.series ?? "").dense,
     };
   });
 }

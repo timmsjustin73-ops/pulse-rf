@@ -27,6 +27,42 @@ export type CatalogDevice = {
 
 
 /** Powers a device can actually be set to, in mW. */
+
+export type SeriesSpec = { occupied: number; spacing: number; dense?: number; kind: "mic" | "iem" | "other" };
+
+/** Occupied width and maker spacing in MHz. Dense is the maker's own tight mode. */
+export const SERIES: Record<string, SeriesSpec> = {
+  "ULX-D": { occupied: 0.2, spacing: 0.35, dense: 0.125, kind: "mic" },
+  "Axient Digital": { occupied: 0.2, spacing: 0.35, dense: 0.125, kind: "mic" },
+  "QLX-D": { occupied: 0.2, spacing: 0.35, kind: "mic" },
+  "SLX-D": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "SLX-D+": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "BLX": { occupied: 0.2, spacing: 0.5, kind: "mic" },
+  "PGX": { occupied: 0.2, spacing: 0.5, kind: "mic" },
+  "UHF-R": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "PSM 300": { occupied: 0.2, spacing: 0.5, kind: "iem" },
+  "PSM 900": { occupied: 0.2, spacing: 0.4, kind: "iem" },
+  "PSM 1000": { occupied: 0.2, spacing: 0.4, kind: "iem" },
+  "EW-DX": { occupied: 0.2, spacing: 0.6, dense: 0.3, kind: "mic" },
+  "EW-D": { occupied: 0.2, spacing: 0.6, dense: 0.3, kind: "mic" },
+  "Digital 6000": { occupied: 0.2, spacing: 0.4, dense: 0.2, kind: "mic" },
+  "Digital 9000": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "EW 100 G4": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "EW 300 G4": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "EW 500 G4": { occupied: 0.2, spacing: 0.4, kind: "mic" },
+  "EW IEM G4": { occupied: 0.2, spacing: 0.5, kind: "iem" },
+  "EW IEM": { occupied: 0.2, spacing: 0.5, kind: "iem" },
+  "Digital Hybrid": { occupied: 0.2, spacing: 0.35, kind: "mic" },
+  "UWP-D": { occupied: 0.2, spacing: 0.25, kind: "mic" },
+  "DWX": { occupied: 0.2, spacing: 0.25, kind: "mic" },
+  "3000 Series": { occupied: 0.2, spacing: 0.35, kind: "mic" },
+  "5000 Series": { occupied: 0.2, spacing: 0.35, kind: "mic" },
+};
+
+export function specFor(series: string): SeriesSpec {
+  return SERIES[series] ?? { occupied: 0.2, spacing: 0.35, kind: "other" };
+}
+
 export function powerOptions(power: string): number[] {
   const nums = power.split("/").map((part) => Number(part.trim())).filter((n) => Number.isFinite(n) && n > 0);
   return nums.length > 0 ? nums : [10];

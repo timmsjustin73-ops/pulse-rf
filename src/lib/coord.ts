@@ -19,6 +19,8 @@ export type CoordItem = {
   powerMw?: number;
   /** shure-hd is 125 kHz at 1 mW. senn-ld is 300 kHz. */
   densityMode?: "" | "shure-hd" | "senn-ld";
+  seriesSpacing?: number;
+  seriesDense?: number;
   /** MHz. Narrowband UHF radio mics use 0.005. */
   tuneStep?: number | null;
   gaps?: { min: number; max: number }[];
@@ -59,9 +61,11 @@ const GUARD: Record<Spacing, number> = {
 };
 
 /** Spacing comes from the radio's mode, not the show profile. */
-export function guardForItem(item: { densityMode?: string }, _spacing?: Spacing): number {
+export function guardForItem(item: { densityMode?: string; seriesSpacing?: number; seriesDense?: number }, _spacing?: Spacing): number {
+  if (item.densityMode && item.seriesDense) return item.seriesDense;
   if (item.densityMode === "shure-hd") return 0.125;
   if (item.densityMode === "senn-ld") return 0.3;
+  if (item.seriesSpacing) return item.seriesSpacing;
   return 0.35;
 }
 
