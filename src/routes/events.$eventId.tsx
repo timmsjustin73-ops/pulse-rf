@@ -251,7 +251,8 @@ function EventScreen() {
           ))}
         </nav>
         <EventContext.Provider value={{ data, visible, custom, manager, canRequest, busy, run, eventId, onEdit: setEditingId }}>
-          <Outlet />
+          {agent && <AgentPanel eventId={data.event.id} />}
+        <Outlet />
         </EventContext.Provider>
       </div>
     </div>

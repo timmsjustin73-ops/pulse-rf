@@ -1969,3 +1969,26 @@ export const setLineMode = createServerFn({ method: "POST" })
     await sql`update requests set density_mode = ${data.mode}, power_mw = ${data.mode ? 1 : 10} where id = ${data.requestId}`;
     return loadBundle(sql, data.eventId, context.userId);
   });
+
+export const agentEnabled = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const rows = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
+    return { on: rows[0]?.agent_enabled ?? false };
+  });
+
+export const agentAdd = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), text: z.string().min(2).max(200) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
+    if (!me[0]?.agent_enabled) throw new Error("The agent is not on for this account.");
+    await requireAccess(sql, data.eventId, context.userId, "tech");
+    const words = data.text.toLowerCase();
+    const hit = CATALOG.find((d) => words.includes(d.series.toLowerCase()) && words.includes(d.band.toLowerCase()))
+      ?? CATALOG.find((d) => words.includes(d.series.toLowerCase()));
+    if (!hit) return { found: false as const, name: "" };
+    return { found: true as const, name: hit.name, key: hit.key, series: hit.series, band: hit.band, power: hit.power };
+  });
