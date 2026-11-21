@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
@@ -12,23 +12,32 @@ function PermissionsRoute() {
   );
 }
 
+const ROLES = [
+  { name: "Admin", detail: "Every show and every company." },
+  { name: "Company owner", detail: "Their company. Sets manager or tech." },
+  { name: "RF manager", detail: "Coordinates a show." },
+  { name: "Tech", detail: "Requests and views their company." },
+];
+
 function PermissionsPage() {
   const { user } = useCurrentUserState();
-  const admin = user?.primaryEmail === "justin@jtlive.tech";
-  if (!admin) return <p className="text-sm text-muted">Admin and company owners only.</p>;
+  if (user?.primaryEmail !== "justin@jtlive.tech") {
+    return <p className="text-sm text-muted">Admin only.</p>;
+  }
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Permissions</h1>
-      <p className="text-sm text-muted">Admin sees everyone. A company owner sees only their company.</p>
-      <div className="rounded-xl border border-border bg-surface p-4 text-sm">
-        <p className="font-medium">Roles</p>
-        <ul className="mt-2 space-y-1 text-muted">
-          <li>Admin — every show, every company.</li>
-          <li>Company owner — their company only. Can set manager or tech.</li>
-          <li>RF manager — coordinates a show.</li>
-          <li>Tech — requests and views their company.</li>
-        </ul>
-      </div>
+    <div className="mx-auto max-w-2xl">
+      <p className="text-sm text-muted">Who can see what. Change a person from Admin, People.</p>
+      <table className="mt-4 w-full text-left text-sm">
+        <tbody>
+          {ROLES.map((role) => (
+            <tr key={role.name} className="border-b border-border">
+              <td className="w-40 py-3 font-medium">{role.name}</td>
+              <td className="py-3 text-muted">{role.detail}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Link to="/admin" className="mt-6 inline-block text-sm text-primary">Open People</Link>
     </div>
   );
 }

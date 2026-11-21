@@ -42,9 +42,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div>
-        <header className="no-print flex h-14 items-center justify-end gap-2 border-b border-border px-4 lg:hidden">
-          <NoticeBell />
-          <UserButton />
+        <header className="no-print flex h-14 items-center justify-between border-b border-border px-4 lg:px-8">
+          <p className="text-sm font-medium">{titleFor(path)}</p>
+          <div className="flex items-center gap-2 lg:hidden">
+            <NoticeBell />
+            <UserButton />
+          </div>
         </header>
         <main className="px-4 py-6 lg:px-8">{children}</main>
       </div>
@@ -129,4 +132,14 @@ function NoticeBell() {
       )}
     </div>
   );
+}
+
+function titleFor(path: string): string {
+  if (path.startsWith("/admin")) return "Admin";
+  if (path.startsWith("/permissions")) return "Permissions";
+  if (path.startsWith("/company")) return "Company";
+  if (path.startsWith("/scan")) return "Scanner";
+  if (path.startsWith("/library")) return "Device library";
+  if (path.startsWith("/events")) return "Show";
+  return "Events";
 }
