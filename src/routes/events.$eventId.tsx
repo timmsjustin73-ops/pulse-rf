@@ -362,6 +362,47 @@ function Holds({ data, busy, run }: { data: Bundle; busy: string; run: (label: s
   );
 }
 
+export function RequestTree({ data }: { data: Bundle }) {
+  return (
+    <div className="max-h-[420px] overflow-auto rounded-xl border border-border bg-surface text-sm">
+      {data.zones.map((zone) => {
+        const inZone = data.requests.filter((r) => r.zone_id === zone.id);
+        if (inZone.length === 0) return null;
+        const companies = [...new Set(inZone.map((r) => data.members.find((m) => m.user_id === r.created_by)?.company || "No company"))];
+        return (
+          <div key={zone.id} className="border-b border-border">
+            <p className="bg-bg px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{zone.name}</p>
+            {companies.map((company) => {
+              const lines = inZone.filter((r) => (data.members.find((m) => m.user_id === r.created_by)?.company || "No company") === company);
+              const batches = [...new Set(lines.map((r) => r.batch_id).filter(Boolean))] as string[];
+              return (
+                <div key={company} className="px-3 py-2">
+                  <p className="font-medium">{company}</p>
+                  {batches.map((id) => {
+                    const batch = data.batches.find((b) => b.id === id);
+                    const group = lines.filter((r) => r.batch_id === id);
+                    return (
+                      <div key={id} className="mt-1 pl-3">
+                        <p className="text-xs text-muted">Request · {batch?.title ?? "Untitled"}</p>
+                        {group.map((r) => (
+                          <p key={r.id} className="flex justify-between gap-3 py-0.5">
+                            <span>{r.label}</span>
+                            <span className={r.assigned_mhz ? "text-ok" : "text-muted"}>{r.assigned_mhz ? `${formatMhz(r.assigned_mhz)} allowed` : "waiting"}</span>
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Plot({
   data,
   manager,
@@ -390,6 +431,7 @@ function Plot({
   );
   return (
     <div className="space-y-4">
+      <RequestTree data={data} />
       {carriers.length > 0 && (
         <SpectrumChart carriers={carriers} marks={marks} min={Math.floor(lo)} max={Math.ceil(hi)} />
       )}

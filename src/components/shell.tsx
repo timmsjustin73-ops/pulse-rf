@@ -18,29 +18,42 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   if (!user) return <RedirectToSignIn />;
   return (
-    <div className="min-h-screen bg-bg text-fg">
-      <header className="no-print sticky top-0 z-20 border-b border-border bg-bg/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-fg">
-              <Radio className="size-4" aria-hidden="true" />
-            </span>
-            Pulse RF
-          </Link>
-          <nav className="ml-2 flex items-center gap-1 text-sm">
-            <TopLink to="/" label="Events" active={path === "/"} />
-            <TopLink to="/requests" label="Requests" active={path.startsWith("/requests")} />
-            <TopLink to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
-            <TopLink to="/library" label="Devices" active={path.startsWith("/library")} />
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <NoticeBell />
-            <UserButton />
-          </div>
+    <div className="min-h-screen bg-bg text-fg lg:grid lg:grid-cols-[220px_1fr]">
+      <aside className="no-print border-b border-border bg-surface lg:min-h-screen lg:border-b-0 lg:border-r">
+        <div className="flex h-14 items-center gap-2 px-4 font-semibold">
+          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-fg">
+            <Radio className="size-4" aria-hidden="true" />
+          </span>
+          Pulse RF
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:px-3">
+          <Side to="/" label="Home" active={path === "/"} />
+          <Side to="/" label="Events" active={path === "/"} />
+          <Side to="/requests" label="My Requests" active={path.startsWith("/requests")} />
+          <Side to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
+          <Side to="/library" label="My Devices" active={path.startsWith("/library")} />
+        </nav>
+        <div className="hidden items-center gap-2 px-4 py-4 lg:flex">
+          <NoticeBell />
+          <UserButton />
+        </div>
+      </aside>
+      <div>
+        <header className="no-print flex h-14 items-center justify-end gap-2 border-b border-border px-4 lg:hidden">
+          <NoticeBell />
+          <UserButton />
+        </header>
+        <main className="px-4 py-6 lg:px-8">{children}</main>
+      </div>
     </div>
+  );
+}
+
+function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate"; label: string; active: boolean }) {
+  return (
+    <Link to={to} className={"rounded-lg px-3 py-2 text-sm " + (active ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg")}>
+      {label}
+    </Link>
   );
 }
 

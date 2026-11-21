@@ -176,7 +176,7 @@ function Dashboard() {
         </form>
       </div>
       <section className="space-y-3">
-        <h2 className="font-semibold">Your shows</h2>
+        <h2 className="text-xl font-semibold">Manage Events</h2>
         {rows === null ? (
           <p className="text-sm text-muted">Loading events…</p>
         ) : rows.length === 0 ? (
@@ -184,28 +184,28 @@ function Dashboard() {
             Nothing here yet. Create an event or load the sample festival.
           </p>
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <button
-                  type="button"
-                  className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-surface-2"
-                  onClick={() => navigate({ to: "/events/$eventId", params: { eventId: row.id } })}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{row.name}</span>
-                    <span className="block text-sm text-muted">
-                      {[row.venue, row.city].filter(Boolean).join(" · ") || "No venue yet"}
-                    </span>
-                  </span>
-                  <span className="font-mono text-sm tabular-nums text-primary">
-                    {row.assigned}/{row.total}
-                  </span>
-                  <span className="text-xs uppercase tracking-wide text-muted">{row.role}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-hidden rounded-xl border border-border bg-surface">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3">Event</th>
+                  <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">Dates</th>
+                  <th className="px-4 py-3">RF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2" onClick={() => navigate({ to: "/events/$eventId/requests", params: { eventId: row.id } })}>
+                    <td className="px-4 py-3 font-medium">{row.name}</td>
+                    <td className="px-4 py-3 text-muted">{[row.venue, row.city].filter(Boolean).join(", ") || "—"}</td>
+                    <td className="px-4 py-3 text-muted">{row.startsOn || "—"}</td>
+                    <td className="px-4 py-3 font-mono">{row.assigned}/{row.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
