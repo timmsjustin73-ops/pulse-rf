@@ -39,8 +39,8 @@ function AdminPage() {
             <div key={c.id} className="rounded-xl border border-border p-3 text-sm">
               <p className="font-medium">{c.name}</p>
               <p className="text-muted">{people.members.filter((m) => m.company_id === c.id).length} people</p>
-              <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); const email = new FormData(e.currentTarget).get("email"); if (typeof email === "string") void inviteToCompany({ data: { companyId: c.id, email } }).then((r) => window.alert(r.joined ? "Added" : `Code ${r.code}`)); }}>
-                <input name="email" className={fieldClass} placeholder="Email" />
+              <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); const email = new FormData(e.currentTarget).get("email"); const phone = new FormData(e.currentTarget).get("phone"); if (typeof email === "string" && typeof phone === "string") void inviteToCompany({ data: { companyId: c.id, email, phone } }).then((r) => window.alert(r.joined ? "Added" : `Code ${r.code}`)); }}>
+                <input name="email" className={fieldClass} placeholder="Email" required /><input name="phone" className={fieldClass} placeholder="Phone" required />
                 <button className={btnClass} type="submit">Add</button>
               </form>
             </div>

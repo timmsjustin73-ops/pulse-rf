@@ -5,6 +5,7 @@ import { authClient, authEnabled } from "@/lib/auth/client";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { btnClass, fieldClass, messageOf } from "@/components/shell";
+import { setMyPhone } from "@/lib/pulse.functions";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -21,6 +22,7 @@ function Login() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -35,6 +37,10 @@ function Login() {
         mode === "up"
           ? await authClient.signUp.email({ email, password, name: name || email })
           : await authClient.signIn.email({ email, password });
+      if (mode === "up") {
+        if (phone.trim().length < 8) { setError("A phone number is required."); setBusy(false); return; }
+        await setMyPhone({ data: { phone } });
+      }
       if (result.error) {
         setError(result.error.message ?? "Could not sign in.");
         setBusy(false);

@@ -1751,7 +1751,7 @@ export const setPrivateNote = createServerFn({ method: "POST" })
 
 export const inviteToCompany = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ companyId: z.string().min(1), email: z.string().email() }))
+  .validator(z.object({ companyId: z.string().min(1), email: z.string().email(), phone: z.string().trim().min(8).max(20) }))
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     const admin = await isPlatformAdmin(sql, context.userId);
@@ -1759,6 +1759,7 @@ export const inviteToCompany = createServerFn({ method: "POST" })
     if (!admin && !owner[0]?.owner) throw new Error("Only an owner or admin can add people.");
     const users = await sql<{ id: string }>`select id from "user" where email = ${data.email}`;
     if (users[0]) {
+      await sql`update "user" set phone = ${data.phone} where id = ${users[0].id}`;
       await sql`insert into company_members (company_id, user_id, owner) values (${data.companyId}, ${users[0].id}, ${false}) on conflict (company_id, user_id) do nothing`;
       return { joined: true as const, code: "" };
     }
@@ -1843,4 +1844,13 @@ export const myNotify = createServerFn({ method: "GET" })
       select notify_email, notify_whatsapp, phone, quiet_from, quiet_to, email from "user" where id = ${context.userId}
     `;
     return rows[0] ?? { notify_email: true, notify_whatsapp: false, phone: "", quiet_from: "22:00", quiet_to: "07:00", email: null };
+  });
+
+export const setMyPhone = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ phone: z.string().trim().min(8).max(20) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`update "user" set phone = ${data.phone} where id = ${context.userId}`;
+    return { ok: true as const };
   });
