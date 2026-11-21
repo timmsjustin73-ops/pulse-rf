@@ -377,7 +377,7 @@ export function RequestTree({ data }: { data: Bundle }) {
                         <p className="text-xs text-muted">Request · {batch?.title ?? "Untitled"}</p>
                         {group.map((r) => (
                           <p key={r.id} className="flex justify-between gap-3 py-0.5">
-                            <span>{r.label}</span>
+                            <span><span className={"mr-2 inline-block size-2 rounded-full " + (r.tuned_at ? "bg-ok" : r.assigned_mhz ? "bg-primary" : "bg-muted")} />{r.label}</span>
                             <span className={r.assigned_mhz ? "text-ok" : "text-muted"}>{r.assigned_mhz ? `${formatMhz(r.assigned_mhz)} allowed` : "waiting"}</span>
                           </p>
                         ))}

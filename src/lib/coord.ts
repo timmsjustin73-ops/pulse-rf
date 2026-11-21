@@ -51,15 +51,15 @@ type Foot = {
 };
 
 const GUARD: Record<Spacing, number> = {
-  resilience: 0.35,
-  balanced: 0.15,
-  density: 0.04,
+  resilience: 0.2,
+  balanced: 0.075,
+  density: 0.025,
 };
 
 const IMD: Record<Spacing, number> = {
-  resilience: 0.12,
-  balanced: 0.06,
-  density: 0.025,
+  resilience: 0.1,
+  balanced: 0.05,
+  density: 0.0,
 };
 
 const SCALE = 1e6;

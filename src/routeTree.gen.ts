@@ -16,6 +16,7 @@ import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PermissionsRouteImport } from './routes/permissions'
 import { Route as RequestsRouteImport } from './routes/requests'
+import { Route as ScanRouteImport } from './routes/scan'
 import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
 import { Route as ShareTokenRouteImport } from './routes/share.$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -62,6 +63,11 @@ const PermissionsRoute = PermissionsRouteImport.update({
 const RequestsRoute = RequestsRouteImport.update({
   id: '/requests',
   path: '/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScanRoute = ScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventsEventIdRoute = EventsEventIdRouteImport.update({
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
+  '/scan': typeof ScanRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
   '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
+  '/scan': typeof ScanRoute
   '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
+  '/scan': typeof ScanRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
   '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/permissions'
     | '/requests'
+    | '/scan'
     | '/events/$eventId'
     | '/share/$token'
     | '/api/auth/$'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/permissions'
     | '/requests'
+    | '/scan'
     | '/share/$token'
     | '/api/auth/$'
     | '/events/$eventId/antennas'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/permissions'
     | '/requests'
+    | '/scan'
     | '/events/$eventId'
     | '/share/$token'
     | '/api/auth/$'
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PermissionsRoute: typeof PermissionsRoute
   RequestsRoute: typeof RequestsRoute
+  ScanRoute: typeof ScanRoute
   EventsEventIdRoute: typeof EventsEventIdRouteWithChildren
   ShareTokenRoute: typeof ShareTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -315,6 +328,13 @@ declare module '@tanstack/react-router' {
       path: '/requests'
       fullPath: '/requests'
       preLoaderRoute: typeof RequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scan': {
+      id: '/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof ScanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events/$eventId': {
@@ -440,6 +460,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PermissionsRoute: PermissionsRoute,
   RequestsRoute: RequestsRoute,
+  ScanRoute: ScanRoute,
   EventsEventIdRoute: EventsEventIdRouteWithChildren,
   ShareTokenRoute: ShareTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
