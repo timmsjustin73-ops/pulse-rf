@@ -363,7 +363,7 @@ async function insertEvent(
     if (taken.length === 0) break;
     join = makeCode();
   }
-  const acma = acmaBlockers(input.notes);
+  const acma = await acmaBlockers(input.notes);
     const blockers = JSON.stringify([...defaultBlockers(input.region), ...acma]);
   await sql`
     insert into events (id, owner_id, name, venue, city, region, starts_on, ends_on, spacing, notes, join_code, blockers)
@@ -1809,7 +1809,54 @@ export const finaliseBatch = createServerFn({ method: "POST" })
     return loadBundle(sql, data.eventId, context.userId);
   });
 
-function acmaBlockers(notes: string): { min: number; max: number; label: string }[] {
+async function acmaBlockers(notes: string): Promise<{ min: number; max: number; label: string }[]> {
+  const postcode = notes.match(/\b(\d{4})\b/)?.[1];
+  if (postcode) {
+    try {
+      const live = await acmaByPostcode(postcode);
+      if (live.length > 0) return live;
+    } catch {
+      // fall through to the city list
+    }
+  }
+  return acmaByCity(notes);
+}
+
+async function acmaByPostcode(postcode: string): Promise<{ min: number; max: number; label: string }[]> {
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://tempuri.org/">
+  <soap:Body>
+    <tns:AssignmentRangeJSON>
+      <tns:strLowerPostCode>${postcode}</tns:strLowerPostCode>
+      <tns:strUpperPostCode>${postcode}</tns:strUpperPostCode>
+      <tns:strLowerFreq>520000000</tns:strLowerFreq>
+      <tns:strUpperFreq>694000000</tns:strUpperFreq>
+      <tns:strLowerDate>2010-01-01</tns:strLowerDate>
+      <tns:strUpperDate>2030-12-31</tns:strUpperDate>
+      <tns:isPostCode>true</tns:isPostCode>
+      <tns:isFrequency>true</tns:isFrequency>
+      <tns:strLimit>40</tns:strLimit>
+      <tns:strOffset>0</tns:strOffset>
+    </tns:AssignmentRangeJSON>
+  </soap:Body>
+</soap:Envelope>`;
+  const res = await fetch("https://api.acma.gov.au/SpectrumLicensingAPIOuterService/OuterService.svc/soap", {
+    method: "POST",
+    headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '"http://tempuri.org/IOuterService/AssignmentRangeJSON"' },
+    body,
+  });
+  const xml = await res.text();
+  const encoded = xml.match(/AssignmentRangeJSONResult>([^<]+)/)?.[1];
+  if (!encoded) return [];
+  const json = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as { Assignment?: { FREQ: number; BANDWDITH?: number }[] };
+  return (json.Assignment ?? []).map((row) => {
+    const center = row.FREQ / 1_000_000;
+    const width = (row.BANDWDITH ?? 7_000_000) / 1_000_000;
+    return { min: Math.round((center - width / 2) * 1000) / 1000, max: Math.round((center + width / 2) * 1000) / 1000, label: `TV ${postcode}` };
+  });
+}
+
+function acmaByCity(notes: string): { min: number; max: number; label: string }[] {
   const city = notes.toLowerCase();
   const known: Record<string, { min: number; max: number; label: string }[]> = {
     melbourne: [{ min: 527, max: 534, label: "TV Melbourne" }, { min: 585, max: 592, label: "TV Melbourne" }],
