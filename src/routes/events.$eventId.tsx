@@ -648,7 +648,8 @@ export function MyRequests({
   const [spare, setSpare] = useState(false);
   const [qty, setQty] = useState(1);
   const [power, setPower] = useState(10);
-  const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number }[]>([]);
+  const [preferred, setPreferred] = useState("");
+  const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number; preferred?: number }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const device = bands.find((d) => d.key === band) ?? bands[0];
 
@@ -667,6 +668,7 @@ export function MyRequests({
       mode: device.mode === "band" ? "band" as const : "carrier" as const,
       category: device.category,
       powerMw: power,
+      preferred: preferred ? Number(preferred) : undefined,
     }));
     setLines((cur) => [...cur, ...made]);
     setLabel("");

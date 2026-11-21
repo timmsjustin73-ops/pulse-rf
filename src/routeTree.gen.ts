@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CoordinateRouteImport } from './routes/coordinate'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PermissionsRouteImport } from './routes/permissions'
 import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
 import { Route as ShareTokenRouteImport } from './routes/share.$token'
@@ -50,6 +51,11 @@ const LibraryRoute = LibraryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PermissionsRoute = PermissionsRouteImport.update({
+  id: '/permissions',
+  path: '/permissions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestsRoute = RequestsRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
   '/share/$token': typeof ShareTokenRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/permissions': typeof PermissionsRoute
   '/requests': typeof RequestsRoute
   '/events/$eventId': typeof EventsEventIdRouteWithChildren
   '/share/$token': typeof ShareTokenRoute
@@ -178,6 +187,7 @@ export interface FileRouteTypes {
     | '/coordinate'
     | '/library'
     | '/login'
+    | '/permissions'
     | '/requests'
     | '/events/$eventId'
     | '/share/$token'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/coordinate'
     | '/library'
     | '/login'
+    | '/permissions'
     | '/requests'
     | '/share/$token'
     | '/api/auth/$'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/coordinate'
     | '/library'
     | '/login'
+    | '/permissions'
     | '/requests'
     | '/events/$eventId'
     | '/share/$token'
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   CoordinateRoute: typeof CoordinateRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
+  PermissionsRoute: typeof PermissionsRoute
   RequestsRoute: typeof RequestsRoute
   EventsEventIdRoute: typeof EventsEventIdRouteWithChildren
   ShareTokenRoute: typeof ShareTokenRoute
@@ -276,6 +289,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/permissions': {
+      id: '/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof PermissionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/requests': {
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoordinateRoute: CoordinateRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
+  PermissionsRoute: PermissionsRoute,
   RequestsRoute: RequestsRoute,
   EventsEventIdRoute: EventsEventIdRouteWithChildren,
   ShareTokenRoute: ShareTokenRoute,

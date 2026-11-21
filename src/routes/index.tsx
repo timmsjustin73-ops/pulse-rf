@@ -43,6 +43,9 @@ function Dashboard() {
   const [address, setAddress] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [code, setCode] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [managerEmail, setManagerEmail] = useState("");
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromQr = params.get("code");
@@ -105,85 +108,51 @@ function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Events</h1>
-          <p className="text-sm text-muted">Open a show, or start from a coordinated sample plot.</p>
+          <p className="text-sm text-muted">Your shows.</p>
         </div>
-        <button type="button" className={ghostClass} onClick={onSample} disabled={busy !== ""}>
-          {busy === "sample" ? "Building sample…" : "Load sample festival"}
-        </button>
+        <div className="flex gap-2">
+          <button type="button" className={ghostClass} onClick={() => setJoining(true)}>Join with a code</button>
+          <button type="button" className={btnClass} onClick={() => setAdding(true)}>Add event</button>
+        </div>
       </div>
       {error && <Banner tone="bad">{error}</Banner>}
-      <div className="grid gap-4 lg:grid-cols-5">
-        <form onSubmit={onCreate} className="space-y-3 rounded-xl border border-border bg-surface p-4 lg:col-span-3">
-          <h2 className="font-semibold">New coordination</h2>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Event name</span>
-            <input className={fieldClass} required value={name} onChange={(e) => setName(e.target.value)} placeholder="Harbour Lights" />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Venue</span>
-              <input className={fieldClass} value={venue} onChange={(e) => setVenue(e.target.value)} />
-            </label>
-            <label className="block text-sm sm:col-span-2">
-              <span className="mb-1 block text-muted">Address for ACMA lookup</span>
-              <input className={fieldClass} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Docklands stage, Melbourne VIC" />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">City</span>
-              <input className={fieldClass} value={city} onChange={(e) => setCity(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Region examples</span>
-              <select className={fieldClass} value={region} onChange={(e) => setRegion(e.target.value)}>
-                {REGIONS.map((r) => (
-                  <option key={r.id} value={r.id}>{r.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Spacing</span>
-              <select className={fieldClass} value={spacing} onChange={(e) => setSpacing(e.target.value as typeof spacing)}>
-                {SPACINGS.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Starts</span>
-              <input className={fieldClass} type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Ends</span>
-              <input className={fieldClass} type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-            </label>
+      {adding && (
+        <form onSubmit={onCreate} className="fixed inset-0 z-30 grid place-items-center bg-black/50 p-4">
+          <div className="w-full max-w-lg space-y-3 rounded-xl border border-border bg-surface p-5">
+            <h2 className="font-semibold">Add event</h2>
+            <label className="block text-sm">Name<input className={fieldClass + " mt-1"} required value={name} onChange={(e) => setName(e.target.value)} /></label>
+            <label className="block text-sm">RF manager email<input className={fieldClass + " mt-1"} value={managerEmail} onChange={(e) => setManagerEmail(e.target.value)} placeholder="You, unless you type someone else" /></label>
+            <label className="block text-sm">Address for ACMA lookup<input className={fieldClass + " mt-1"} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Docklands stage, Melbourne VIC" /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">Starts<input className={fieldClass + " mt-1"} type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} /></label>
+              <label className="block text-sm">Ends<input className={fieldClass + " mt-1"} type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} /></label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ghostClass} onClick={() => setAdding(false)}>Cancel</button>
+              <button className={btnClass} type="submit" disabled={busy !== ""}>{busy === "create" ? "Creating…" : "Create"}</button>
+            </div>
           </div>
-          <button className={btnClass} type="submit" disabled={busy !== ""}>
-            {busy === "create" ? "Creating…" : "Create event"}
-          </button>
         </form>
-        <form onSubmit={onJoin} className="space-y-3 rounded-xl border border-border bg-surface p-4 lg:col-span-2">
-          <h2 className="font-semibold">Join with a code</h2>
-          <p className="text-sm text-muted">Managers share a six-character code. You can request channels; they assign them.</p>
-          <input
-            className={fieldClass + " font-mono uppercase"}
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="ABC123"
-            minLength={4}
-            required
-          />
-          <button className={ghostClass + " w-full"} type="submit" disabled={busy !== ""}>
-            {busy === "join" ? "Joining…" : "Join event"}
-          </button>
+      )}
+      {joining && (
+        <form onSubmit={onJoin} className="fixed inset-0 z-30 grid place-items-center bg-black/50 p-4">
+          <div className="w-full max-w-sm space-y-3 rounded-xl border border-border bg-surface p-5">
+            <h2 className="font-semibold">Join with a code</h2>
+            <input className={fieldClass + " font-mono uppercase"} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ABC123" minLength={4} required />
+            <div className="flex justify-end gap-2">
+              <button type="button" className={ghostClass} onClick={() => setJoining(false)}>Cancel</button>
+              <button className={btnClass} type="submit" disabled={busy !== ""}>{busy === "join" ? "Joining…" : "Join"}</button>
+            </div>
+          </div>
         </form>
-      </div>
+      )}
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Manage Events</h2>
+          <h2 className="text-xl font-semibold">Events</h2>
           <input className={fieldClass + " max-w-xs"} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, venue, city" />
         </div>
         {rows === null ? (
