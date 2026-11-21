@@ -2058,6 +2058,8 @@ export const agentAct = createServerFn({ method: "POST" })
       if (hit) return { reply: `On ${data.page}: matched ${hit.name}. Band ${hit.band}. Add it from Requests.`, href: "" };
     }
     if (data.context) return { reply: `On ${data.page}: ${data.context.slice(0, 400)}`, href: "" };
+    const live = await askGrok(data.page, data.text, data.context);
+    if (live) return { reply: live, href: "" };
     const advice = rfAdvice(words);
     if (advice) return { reply: advice, href: "" };
     return { reply: `On ${data.page}: nothing loaded on this page yet.`, href: "" };
@@ -2071,23 +2073,38 @@ function nextWeekday(day: number): string {
 }
 
 function rfAdvice(words: string): string {
-  if (words.includes("density") || words.includes("more radio") || words.includes("fit more")) {
-    return "Use the radio's own mode. ULX-D HD is 125 kHz at 1 mW, up to 47 in a 6 MHz channel. EW-DX Link Density is 300 kHz. Keep that block away from analog and IEMs. Do not go tighter than the maker.";
-  }
-  if (words.includes("intermod")) {
-    return "2A-B and A+B-C matter when packs are close. A 5th order across two stages does not. Power widens the guard. 1 mW is tight. 50 mW is wide.";
-  }
-  if (words.includes("led") || words.includes("wall") || words.includes("scan")) {
-    return "Scan with the LED wall on and the lights up. A blank wall already spikes the floor. A plot on a dead room is a guess. Name the wall as a blocker.";
-  }
-  if (words.includes("tv") || words.includes("acma") || words.includes("postcode")) {
-    return "Put the postcode in the address. Pulse asks ACMA for licensed TV between 520 and 694 and blocks it. If that misses, it uses the city list.";
-  }
-  if (words.includes("iem")) {
-    return "An IEM is louder than a mic. Keep IEMs in their own slice. Do not place them inside a dense mic block.";
-  }
-  if (words.includes("spacing") || words.includes("how close")) {
-    return "ULX-D and Axient 350 kHz, or 125 in HD. QLX-D 350. SLX-D 400. EW-DX 600, or 300 in LD. Digital 6000 400, or 200 in LD. Analog and IEMs 400 to 500.";
-  }
+  const book: { test: string[]; answer: string }[] = [
+    { test: ["density", "more radio", "fit more", "how many"], answer: "Use the radio's own mode. ULX-D HD is 125 kHz at 1 mW, up to 47 in a 6 MHz channel and 63 in 8 MHz. Axient matches that. EW-DX Link Density is 300 kHz. Digital 6000 LD is 200 kHz. Keep a dense block away from analog and IEMs. Do not go tighter than the maker." },
+    { test: ["intermod", "imd", "2a", "product"], answer: "2nd order is A+B and the difference. 3rd is 2A-B for two radios and A+B-C for three. 5th is 3A-2B. These matter when packs are close, in a rack or on one person. Skip 5th order across ungrouped areas. Power widens the guard. 1 mW is tight. 50 mW is wide." },
+    { test: ["led", "wall", "light", "scan"], answer: "Scan with the LED wall on, the lights up, and the other stage live. A blank wall already spikes the floor. With a picture the peaks move. A plot on a dead room is a guess. Name the wall as a blocker." },
+    { test: ["tv", "acma", "postcode", "dtv"], answer: "Put the postcode in the address. Pulse asks ACMA for licensed transmitters from 520 to 694 MHz and blocks them. Australia wireless audio sits above 520 and below 694. If the lookup misses, it uses the city list. Check it. ACMA data can be late." },
+    { test: ["iem", "psm", "in ear", "in-ear"], answer: "An IEM is louder than a mic. Keep IEMs in their own slice, away from a dense mic block. A bandpass on the mic antennas is the real fix. PSM 300, 900 and 1000 and EW IEM G4 are IEMs." },
+    { test: ["spacing", "how close", "gap", "guard"], answer: "ULX-D and Axient 350 kHz, or 125 in HD. QLX-D 350, no HD. SLX-D 400. EW-DX and EW-D 600, or 300 in LD. Digital 6000 400, or 200 in LD. Digital 9000 400. Analog G4 and Lectrosonics 350 to 400. Sony UWP-D and DWX 250. IEMs 400 to 500." },
+    { test: ["power", "mw", "milliwatt"], answer: "10 mW is the default. 1 mW is how a dense room fits, and range drops to about 30 m on ULX-D HD. 20 or 50 mW is for a throw, and it widens the intermod guard. Drop power before you tighten spacing." },
+    { test: ["zone", "area", "reuse", "share"], answer: "Areas that can hear each other are grouped and cannot share a frequency. Ungrouped areas can. A pack that is finished can give its frequency to a later time slot. A manager can hold a slot so it is not reused." },
+    { test: ["analog", "digital", "mix"], answer: "Do not mix analog and digital in the same slice. Do not put an IEM in a dense mic block. Same-brand digital packs go together, on that maker's grid." },
+    { test: ["antenna", "combiner", "distro"], answer: "Use a combiner on IEMs. It cuts the intermod the whips make. Antenna gain only beats cable loss. It does not pull a weak pack out of the noise. Get the antenna close to the packs." },
+    { test: ["walk", "dropout", "range"], answer: "The plot is a plan. Walk the pack past the wall and under the truss. If it drops, move it. Do not argue with the plot." },
+  ];
+  for (const row of book) if (row.test.some((word) => words.includes(word))) return row.answer;
   return "";
+}
+
+async function askGrok(page: string, question: string, context: string): Promise<string> {
+  const key = process.env.XAI_API_KEY;
+  if (!key) return "";
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: "grok-3",
+      messages: [
+        { role: "system", content: "You are the Pulse RF coordinator on the site. Be short. You know wireless mics, IEMs, intermod, spacing, ACMA, and LED walls. Do not invent a frequency. If they ask to create a show or add a device, say what you would do and let the rules handle it." },
+        { role: "user", content: `Page: ${page}\n${context}\n\n${question}` },
+      ],
+    }),
+  });
+  if (!res.ok) return "";
+  const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return json.choices?.[0]?.message?.content ?? "";
 }
