@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell, btnClass, fieldClass } from "@/components/shell";
-import { addToCompany, createCompany, inviteToCompany, listEvents, listPeople, setUserAccess } from "@/lib/pulse.functions";
+import { addToCompany, createCompany, inviteToCompany, listEvents, listPeople, setUserAccess, deleteUser } from "@/lib/pulse.functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { Link } from "@tanstack/react-router";
 
@@ -79,7 +79,7 @@ function People({ people, onChange }: { people: Awaited<ReturnType<typeof listPe
         <form className="space-y-3 rounded-xl border border-border p-4 text-sm" onSubmit={(e) => {
           e.preventDefault();
           setMsg("Saving…");
-          void setUserAccess({ data: { userId: user.id, admin, companyId, owner } })
+          void setUserAccess, deleteUser({ data: { userId: user.id, admin, companyId, owner } })
             .then(() => { setMsg("Saved"); onChange(); })
             .catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Save failed"));
         }}>
@@ -93,6 +93,7 @@ function People({ people, onChange }: { people: Awaited<ReturnType<typeof listPe
           </label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={owner} onChange={(e) => setOwner(e.target.checked)} /> Company owner</label>
           <button className={btnClass} type="submit">Save</button>
+          <button type="button" className="text-sm text-bad" onClick={() => { if (window.confirm("Delete this account? Their requests stay.")) void deleteUser({ data: { userId: user.id } }).then(onChange); }}>Delete user</button>
           {msg && <p className="text-xs text-muted">{msg}</p>}
         </form>
       )}

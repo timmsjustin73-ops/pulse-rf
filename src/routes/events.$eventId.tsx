@@ -54,6 +54,7 @@ import {
   updateBatch,
   reviewLine,
   finaliseBatch,
+  addManager,
   leaveEvent,
   removeMember,
   copyShow,
@@ -161,6 +162,7 @@ function EventScreen() {
     { to: "/events/$eventId/antennas" as const, label: "Antennas", show: false },
     { to: "/events/$eventId/sheet" as const, label: "Sheet", show: true },
     { to: "/events/$eventId/reports" as const, label: "Reports", show: manager },
+    { to: "/events/$eventId/audit" as const, label: "Audit", show: manager },
     { to: "/events/$eventId/settings" as const, label: "Settings", show: manager },
   ].filter((page) => page.show);
   
@@ -1436,6 +1438,7 @@ export function Settings({
           const name = window.prompt("Name for the copy", data.event.name + " copy");
           if (name) void copyShow({ data: { eventId: data.event.id, name } }).then((r) => { window.location.href = `/events/${r.id}/requests`; });
         }}>Copy show</button>
+        <button type="button" className={ghostClass} onClick={() => { const email = window.prompt("Manager email"); if (email) void run("manager", () => addManager({ data: { eventId: data.event.id, email } })); }}>Add manager</button>
         <button type="button" className={ghostClass} onClick={() => {
           const raw = window.prompt("Paste a Wireless Workbench export");
           if (!raw) return;

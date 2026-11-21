@@ -1919,3 +1919,30 @@ export const setMyPhone = createServerFn({ method: "POST" })
     await sql`update "user" set phone = ${data.phone} where id = ${context.userId}`;
     return { ok: true as const };
   });
+
+export const deleteUser = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ userId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if (!(await isPlatformAdmin(sql, context.userId))) throw new Error("Admin only.");
+    if (data.userId === context.userId) throw new Error("You cannot delete yourself.");
+    await sql`delete from company_members where user_id = ${data.userId}`;
+    await sql`delete from event_members where user_id = ${data.userId}`;
+    await sql`delete from "session" where user_id = ${data.userId}`;
+    await sql`delete from "account" where user_id = ${data.userId}`;
+    await sql`delete from "user" where id = ${data.userId}`;
+    return { ok: true as const };
+  });
+
+export const addManager = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), email: z.string().email() }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const users = await sql<{ id: string }>`select id from "user" where email = ${data.email}`;
+    if (!users[0]) throw new Error("No account with that email.");
+    await sql`insert into event_members (event_id, user_id, role) values (${data.eventId}, ${users[0].id}, ${"manager"}) on conflict (event_id, user_id) do update set role = ${"manager"}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
