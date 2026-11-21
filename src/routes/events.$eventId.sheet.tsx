@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Sheet, useEventWork } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { Sheet } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/sheet")({
   component: SheetPage,

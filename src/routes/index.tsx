@@ -39,6 +39,8 @@ function Dashboard() {
   const [region, setRegion] = useState("AU");
   const [spacing, setSpacing] = useState<"resilience" | "balanced" | "density">("balanced");
   const [startsOn, setStartsOn] = useState("");
+  const [query, setQuery] = useState("");
+  const [address, setAddress] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [code, setCode] = useState("");
   useEffect(() => {
@@ -68,7 +70,7 @@ function Dashboard() {
     setError("");
     try {
       const { id } = await createEvent({
-        data: { name, venue, city, region, spacing, startsOn, endsOn, notes: "" },
+        data: { name, venue, city, region, spacing, startsOn, endsOn, notes: address ? `Address: ${address}` : "" },
       });
       await navigate({ to: "/events/$eventId", params: { eventId: id } });
     } catch (err) {
@@ -176,7 +178,10 @@ function Dashboard() {
         </form>
       </div>
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Manage Events</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">Manage Events</h2>
+          <input className={fieldClass + " max-w-xs"} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, venue, city" />
+        </div>
         {rows === null ? (
           <p className="text-sm text-muted">Loading events…</p>
         ) : rows.length === 0 ? (
@@ -195,9 +200,12 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {rows.filter((row) => `${row.name} ${row.venue} ${row.city}`.toLowerCase().includes(query.toLowerCase())).map((row) => (
                   <tr key={row.id} className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-2" onClick={() => navigate({ to: "/events/$eventId/requests", params: { eventId: row.id } })}>
-                    <td className="px-4 py-3 font-medium">{row.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                        <span className={"mr-2 inline-block size-2 rounded-full " + statusColour(row.startsOn, row.endsOn)} />
+                        {row.name}
+                      </td>
                     <td className="px-4 py-3 text-muted">{[row.venue, row.city].filter(Boolean).join(", ") || "—"}</td>
                     <td className="px-4 py-3 text-muted">{row.startsOn || "—"}</td>
                     <td className="px-4 py-3 font-mono">{row.assigned}/{row.total}</td>
@@ -210,4 +218,11 @@ function Dashboard() {
       </section>
     </div>
   );
+}
+
+function statusColour(starts: string, ends: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  if (ends && ends < today) return "bg-bad";
+  if (starts && starts > today) return "bg-warn";
+  return "bg-ok";
 }

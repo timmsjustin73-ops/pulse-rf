@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MyRequests, useEventWork } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { MyRequests } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/requests")({
   component: RequestsPage,

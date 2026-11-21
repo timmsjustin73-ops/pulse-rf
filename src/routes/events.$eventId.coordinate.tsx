@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Coordinate, useEventWork } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { Coordinate } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/coordinate")({
   component: CoordinatePage,

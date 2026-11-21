@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Antennas, useEventWork } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { Antennas } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/antennas")({
   component: AntennasPage,

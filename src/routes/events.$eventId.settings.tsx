@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Settings, useEventWork } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { Settings } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/settings")({
   component: SettingsPage,

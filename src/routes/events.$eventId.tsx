@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { createContext, useContext } from "react";
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { EventContext, useEventWork, type Bundle, type EventWork } from "@/lib/event-context";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
 import { SpectrumChart } from "@/components/spectrum";
 import { CoverageMap, rangeMetres } from "@/components/coverage";
@@ -51,32 +51,21 @@ import {
   setPlotLock,
   beat,
   updateBatch,
+  reviewLine,
+  leaveEvent,
+  removeMember,
+  copyShow,
+  makeGuestCode,
+  listActivity,
 } from "@/lib/pulse.functions";
 import QRCode from "qrcode";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/events/$eventId")({ component: EventRoute });
+export { useEventWork };
+export type { Bundle };
 
-export type Bundle = Awaited<ReturnType<typeof getEvent>>;
 
-export type EventWork = {
-  data: Bundle;
-  visible: Bundle;
-  custom: Awaited<ReturnType<typeof listCustomDevices>>;
-  manager: boolean;
-  canRequest: boolean;
-  busy: string;
-  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
-  eventId: string;
-  onEdit: (id: string) => void;
-};
-
-const EventContext = createContext<EventWork | null>(null);
-export function useEventWork(): EventWork {
-  const value = useContext(EventContext);
-  if (!value) throw new Error("Missing event");
-  return value;
-}
 
 function EventRoute() {
   return (
@@ -1360,6 +1349,12 @@ export function Settings({
             Delete event
           </button>
         )}
+        <button type="button" className={ghostClass} onClick={() => {
+          const name = window.prompt("Name for the copy", data.event.name + " copy");
+          if (name) void copyShow({ data: { eventId: data.event.id, name } }).then((r) => { window.location.href = `/events/${r.id}/requests`; });
+        }}>Copy show</button>
+        <button type="button" className={ghostClass} onClick={() => void leaveEvent({ data: { eventId: data.event.id } }).then(() => { window.location.href = "/"; })}>Leave event</button>
+        <button type="button" className={ghostClass} onClick={() => void makeGuestCode({ data: { eventId: data.event.id } }).then((r) => window.alert(`Guest code ${r.code}, expires ${r.expires || "end of show"}`))}>Guest code</button>
       </div>
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Members</h3>

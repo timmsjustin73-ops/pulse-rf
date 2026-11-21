@@ -1566,3 +1566,114 @@ export const editRequestLine = createServerFn({ method: "POST" })
     if (changed) await history(sql, data.eventId, data.requestId, context.userId, "edited", "Changed from Requests page");
     return { ok: true as const };
   });
+
+export const reviewLine = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({
+    eventId: z.string().min(1),
+    requestId: z.string().min(1),
+    status: z.enum(["allowed", "changed", "denied"]),
+    note: z.string().optional().default(""),
+  }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`update requests set review_status = ${data.status}, review_note = ${data.note ?? ""} where id = ${data.requestId}`;
+    await history(sql, data.eventId, data.requestId, context.userId, data.status, data.note ?? "");
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const leaveEvent = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`delete from event_members where event_id = ${data.eventId} and user_id = ${context.userId}`;
+    return { ok: true as const };
+  });
+
+export const removeMember = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), userId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`delete from event_members where event_id = ${data.eventId} and user_id = ${data.userId}`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const copyShow = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), name: z.string().trim().min(1).max(80) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const events = await sql<EventRow>`select * from events where id = ${data.eventId}`;
+    const event = events[0];
+    if (!event) throw new Error("Event not found.");
+    if (event.owner_id !== context.userId && !(await isPlatformAdmin(sql, context.userId))) throw new Error("Only the owner or an admin can copy a show.");
+    const id = uid();
+    await sql`
+      insert into events (id, owner_id, name, venue, city, region, starts_on, ends_on, spacing, notes, join_code, join_role)
+      values (${id}, ${context.userId}, ${data.name}, ${event.venue}, ${event.city}, ${event.region}, ${event.starts_on}, ${event.ends_on}, ${event.spacing}, ${event.notes}, ${uid().slice(0, 6).toUpperCase()}, ${event.join_role})
+    `;
+    await sql`insert into event_members (event_id, user_id, role) values (${id}, ${context.userId}, ${"manager"})`;
+    const zones = await sql<{ id: string; name: string; isolated: boolean }>`select id, name, isolated from zones where event_id = ${data.eventId}`;
+    const zoneMap = new Map<string, string>();
+    for (const z of zones) {
+      const nid = uid();
+      zoneMap.set(z.id, nid);
+      await sql`insert into zones (id, event_id, name, isolated) values (${nid}, ${id}, ${z.name}, ${z.isolated})`;
+    }
+    const batches = await sql<{ id: string; zone_id: string | null; title: string; notes: string }>`select id, zone_id, title, notes from request_batches where event_id = ${data.eventId}`;
+    for (const b of batches) {
+      const nid = uid();
+      await sql`insert into request_batches (id, event_id, zone_id, created_by, title, status, notes) values (${nid}, ${id}, ${b.zone_id ? zoneMap.get(b.zone_id) ?? null : null}, ${context.userId}, ${b.title}, ${"submitted"}, ${b.notes})`;
+      const lines = await sql<RequestRow>`select * from requests where batch_id = ${b.id}`;
+      for (const line of lines) {
+        await sql`
+          insert into requests (id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer, band_min, band_max, bandwidth, mode, notes, batch_id, spare, power_mw)
+          values (${uid()}, ${id}, ${line.zone_id ? zoneMap.get(line.zone_id) ?? null : null}, ${context.userId}, ${line.category}, ${line.label}, ${line.device_key}, ${line.device_name}, ${line.manufacturer}, ${line.band_min}, ${line.band_max}, ${line.bandwidth}, ${line.mode}, ${line.notes}, ${nid}, ${line.spare}, ${line.power_mw ?? 10})
+        `;
+      }
+    }
+    return { id };
+  });
+
+export const addWatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1), mhz: z.number(), label: z.string().optional().default("Watch") }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    await sql`insert into watched (id, event_id, mhz, label) values (${uid()}, ${data.eventId}, ${data.mhz}, ${data.label ?? "Watch"})`;
+    return loadBundle(sql, data.eventId, context.userId);
+  });
+
+export const makeGuestCode = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    const events = await sql<{ ends_on: string }>`select ends_on from events where id = ${data.eventId}`;
+    const code = uid().slice(0, 6).toUpperCase();
+    await sql`insert into guest_codes (id, event_id, code, expires_on) values (${uid()}, ${data.eventId}, ${code}, ${events[0]?.ends_on ?? ""})`;
+    return { code, expires: events[0]?.ends_on ?? "" };
+  });
+
+export const listActivity = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator(z.object({ eventId: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await requireAccess(sql, data.eventId, context.userId, "manager");
+    return sql<{ message: string; created_at: string; name: string | null }>`
+      select a.message, a.created_at, u.name
+      from activity a
+      left join "user" u on u.id = a.user_id
+      where a.event_id = ${data.eventId}
+      order by a.created_at desc
+      limit 40
+    `;
+  });

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEventWork, Zones } from "./events.$eventId";
+import { useEventWork } from "@/lib/event-context";
+import { Zones } from "./events.$eventId";
 
 export const Route = createFileRoute("/events/$eventId/areas")({
   component: AreasPage,
