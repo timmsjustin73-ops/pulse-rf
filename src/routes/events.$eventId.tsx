@@ -864,7 +864,10 @@ export function MyRequests({
             </div>
             <ul className="mt-2 space-y-1 text-muted">
               {data.requests.filter((r) => r.batch_id === b.id).map((r) => (
-                <li key={r.id}>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}{r.flagged_mhz ? ` · moved from ${r.flagged_mhz}` : ""}</li>
+                <li key={r.id} className="flex justify-between gap-3">
+                  <span>{r.label} · {r.assigned_mhz ? formatMhz(r.assigned_mhz) : "waiting"}{r.spare ? " · spare" : ""}{r.tuned_at ? " · tuned" : ""}{r.flagged_mhz ? ` · moved from ${r.flagged_mhz}` : ""}</span>
+                  <button type="button" className="text-xs text-bad" onClick={() => { if (window.confirm("Remove this request?")) void run("del", () => deleteRequest({ data: { eventId: data.event.id, requestId: r.id } })); }}>Remove</button>
+                </li>
               ))}
             </ul>
             <div className="mt-2 flex gap-2">
