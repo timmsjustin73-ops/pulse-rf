@@ -2002,9 +2002,29 @@ export const agentAct = createServerFn({ method: "POST" })
     if (!me[0]?.agent_enabled) throw new Error("The agent is not on for this account.");
     const words = data.text.toLowerCase();
     if (words.includes("event") || words.includes("show")) {
-      const name = data.text.replace(/build|create|new|a|an|event|show|for|me|next|please/gi, "").trim() || "New show";
-      const id = await insertEvent(sql, context.userId, { name, venue: "", city: "", region: "AU", spacing: "balanced", startsOn: "", endsOn: "", notes: "Created by the agent." });
-      return { reply: `Created ${name}.`, href: `/events/${id}` };
+      const nameMatch = data.text.match(/call (?:the )?(?:event|show) ([a-z0-9 ]+)/i);
+      const name = nameMatch?.[1]?.trim() || "New show";
+      const countMatch = data.text.match(/(\d+)\s+([a-z0-9+-]+)/i);
+      const count = countMatch ? Number(countMatch[1]) : 0;
+      const seriesWord = countMatch?.[2]?.toLowerCase() ?? "";
+      const bandMatch = data.text.match(/\b([a-z]\d{2}|[a-z]\d-\d)\b/i);
+      const band = bandMatch?.[1]?.toUpperCase() ?? "";
+      const device = CATALOG.find((d) => d.series.toLowerCase().includes(seriesWord) && (!band || d.band.toUpperCase() === band));
+      if (!device) return { reply: "Which series and band? For example ULX-D L51.", href: "" };
+      const thursday = nextWeekday(4);
+      const id = await insertEvent(sql, context.userId, { name, venue: "", city: "", region: "AU", spacing: "balanced", startsOn: thursday, endsOn: thursday, notes: "Created by the agent." });
+      const batchId = uid();
+      await sql`insert into request_batches (id, event_id, created_by, title, status) values (${batchId}, ${id}, ${context.userId}, ${"Agent"}, ${"submitted"})`;
+      for (let i = 1; i <= Math.min(count || 1, 40); i++) {
+        await sql`insert into requests (
+          id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
+          band_min, band_max, bandwidth, mode, priority, notes, batch_id, power_mw
+        ) values (
+          ${uid()}, ${id}, ${null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
+          ${device.bandMin}, ${device.bandMax}, ${device.bandwidth}, ${device.mode}, ${"normal"}, ${""}, ${batchId}, ${10}
+        )`;
+      }
+      return { reply: `Created ${name} on ${thursday} with ${count || 1} ${device.name}.`, href: `/events/${id}` };
     }
     if (data.eventId) {
       const hit = CATALOG.find((d) => words.includes(d.series.toLowerCase()) && words.includes(d.band.toLowerCase()))
@@ -2014,3 +2034,10 @@ export const agentAct = createServerFn({ method: "POST" })
     if (data.context) return { reply: `On ${data.page}: ${data.context.slice(0, 400)}`, href: "" };
     return { reply: `On ${data.page}: nothing loaded on this page yet.`, href: "" };
   });
+
+function nextWeekday(day: number): string {
+  const now = new Date();
+  const add = (day - now.getDay() + 7) % 7 || 7;
+  now.setDate(now.getDate() + add);
+  return now.toISOString().slice(0, 10);
+}
