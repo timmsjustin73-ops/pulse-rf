@@ -2000,6 +2000,33 @@ export const agentAct = createServerFn({ method: "POST" })
     const sql = await getSql();
     const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
     if (!me[0]?.agent_enabled) throw new Error("The agent is not on for this account.");
+    const decided = await askGrok(data.page, data.text, data.context);
+    if (decided) {
+      try {
+        const plan = JSON.parse(decided) as { action?: string; name?: string; count?: number; series?: string; band?: string; reply?: string };
+        if (plan.action === "add" && data.eventId && plan.series) {
+          const device = CATALOG.find((d) => d.series.toLowerCase() === plan.series!.toLowerCase() && (!plan.band || d.band.toUpperCase() === plan.band.toUpperCase()));
+          if (device) {
+            const batchId = uid();
+            const n = Math.min(plan.count || 1, 40);
+            await sql`insert into request_batches (id, event_id, created_by, title, status) values (${batchId}, ${data.eventId}, ${context.userId}, ${"Agent"}, ${"submitted"})`;
+            for (let i = 1; i <= n; i++) {
+              await sql`insert into requests (
+                id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
+                band_min, band_max, bandwidth, mode, priority, notes, batch_id, power_mw
+              ) values (
+                ${uid()}, ${data.eventId}, ${null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
+                ${device.bandMin}, ${device.bandMax}, ${device.bandwidth}, ${device.mode}, ${"normal"}, ${""}, ${batchId}, ${10}
+              )`;
+            }
+            return { reply: plan.reply || `Added ${n} ${device.name}.`, href: `/events/${data.eventId}/requests` };
+          }
+        }
+        if (plan.reply && !plan.action) return { reply: plan.reply, href: "" };
+      } catch {
+        if (!decided.startsWith("{")) return { reply: decided, href: "" };
+      }
+    }
     const words = data.text.toLowerCase();
     if (words.includes("join") && /[a-z0-9]{4,}/i.test(data.text)) {
       const code = (data.text.match(/[A-Za-z0-9]{4,8}/) ?? [""])[0].toUpperCase();
@@ -2120,7 +2147,7 @@ async function askGrok(page: string, question: string, context: string): Promise
     body: JSON.stringify({
       model: "grok-3",
       messages: [
-        { role: "system", content: "You are the Pulse RF coordinator on the site. Be short. You know wireless mics, IEMs, intermod, spacing, ACMA, and LED walls. Do not invent a frequency. If they ask to create a show or add a device, say what you would do and let the rules handle it." },
+        { role: "system", content: "You control Pulse RF. Reply with JSON only. To add devices: {"action":"add","series":"ULX-D","band":"L51","count":8,"reply":"Added 8 ULX-D L51."}. To answer: {"reply":"your short answer"}. Series must be exact: ULX-D, QLX-D, Axient Digital, EW-DX, EW-D, SLX-D. Do not invent a frequency." },
         { role: "user", content: `Page: ${page}\n${context}\n\n${question}` },
       ],
     }),
