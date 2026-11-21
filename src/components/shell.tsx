@@ -18,10 +18,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   if (!user) return <RedirectToSignIn />;
   return (
-    <div className="min-h-screen bg-bg text-fg lg:grid lg:grid-cols-[220px_1fr]">
+    <div className="min-h-screen bg-bg text-fg lg:grid lg:grid-cols-[200px_1fr]">
       <aside className="no-print border-b border-border bg-surface lg:min-h-screen lg:border-b-0 lg:border-r">
         <div className="flex h-14 items-center gap-2 px-4 font-semibold">
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-fg">
+          <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-fg text-xs font-bold">
             <Radio className="size-4" aria-hidden="true" />
           </span>
           Pulse RF
@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div>
-        <header className="no-print flex h-14 items-center justify-between border-b border-border px-4 lg:px-8">
+        <header className="no-print flex h-12 items-center justify-between border-b border-border bg-surface/60 px-4 lg:px-6">
           <p className="text-sm font-medium">{titleFor(path)}</p>
           <div className="flex items-center gap-2 lg:hidden">
             <NoticeBell />
@@ -91,13 +91,13 @@ export function Banner({ tone, children }: { tone: "bad" | "ok"; children: React
 }
 
 export const fieldClass =
-  "min-h-11 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-primary";
+  "h-9 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-primary";
 
 export const btnClass =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-fg disabled:opacity-50";
 
 export const ghostClass =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-medium text-fg disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-fg disabled:opacity-50";
 
 export function messageOf(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
