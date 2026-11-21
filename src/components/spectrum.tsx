@@ -15,12 +15,14 @@ export function SpectrumChart({
   min,
   max,
   intermods = [],
+  trace = [],
 }: {
   carriers: Carrier[];
   marks: Mark[];
   min: number;
   max: number;
   intermods?: { mhz: number; order: number }[];
+  trace?: { mhz: number; level: number }[];
 }) {
   const span = Math.max(max - min, 1);
   const x = (mhz: number) => ((mhz - min) / span) * 1000;
@@ -44,6 +46,14 @@ export function SpectrumChart({
             opacity="0.28"
           />
         ))}
+        {trace.length > 1 && (
+          <polyline
+            fill="none"
+            stroke="#7dcea0"
+            strokeWidth="1.5"
+            points={trace.map((p) => `${x(p.mhz)},${134 - Math.max(0, Math.min(100, (p.level + 100)))}`).join(" ")}
+          />
+        )}
         {carriers.map((c) => {
           const cx = x(c.mhz);
           const color = CAT[c.category] ?? "#e3a008";

@@ -305,6 +305,12 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
         threshold: num(s.threshold),
         hits: marks.length,
         marks: marks.map((m) => ({ min: m.min, max: m.max })),
+        trace: s.body.split(/\r?\n/).slice(0, 400).map((line) => {
+          const [f, l] = line.split(/[,;\s]+/);
+          const mhz = Number(f);
+          const level = Number(l);
+          return Number.isFinite(mhz) && Number.isFinite(level) ? { mhz, level } : null;
+        }).filter((p): p is { mhz: number; level: number } => p !== null),
         created_at: s.created_at,
       };
     }),

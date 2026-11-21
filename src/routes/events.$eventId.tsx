@@ -417,6 +417,7 @@ function Plot({
     .filter((r) => r.assigned_mhz != null)
     .map((r) => ({ id: r.id, label: r.label, mhz: r.assigned_mhz as number, category: r.category }));
   const marks = data.scans.flatMap((s) => s.marks);
+const trace = data.scans[0]?.trace ?? [];
   const autoLo = Math.min(
     470,
     ...carriers.map((c) => c.mhz),
@@ -456,7 +457,7 @@ function Plot({
             ))}
             <button type="button" className={ghostClass} onClick={() => setShowIm((v) => !v)}>{showIm ? "Hide intermod" : "Show intermod"}</button>
           </div>
-          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodProducts(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz })), focusId || undefined).filter((h) => orders.includes(h.order)).map((h) => ({ mhz: h.mhz, order: h.order })) : []} />
+          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodProducts(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz })), focusId || undefined).filter((h) => orders.includes(h.order)).map((h) => ({ mhz: h.mhz, order: h.order })) : []} trace={trace} />
         </div>
       )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
