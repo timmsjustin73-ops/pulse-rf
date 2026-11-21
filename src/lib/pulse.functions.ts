@@ -258,7 +258,12 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     ? (await sql<{ user_id: string }>`select user_id from company_members where company_id = ${company.id}`).map((r) => r.user_id)
     : [];
   const zonesClean = zones.map((z) => ({ ...z, isolated: flag(z.isolated) }));
-  const phones = await sql<{ id: string; phone: string }>`select id, phone from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  let phones: { id: string; phone: string }[] = [];
+  try {
+    phones = await sql<{ id: string; phone: string }>`select id, phone from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  } catch {
+    phones = [];
+  }
   const phoneBy = new Map(phones.map((p) => [p.id, p.phone]));
   const requestsClean = requests.map((r) => ({
     phone: phoneBy.get(r.created_by) ?? "",
