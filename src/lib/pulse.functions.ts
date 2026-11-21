@@ -1686,7 +1686,8 @@ export const listPeople = createServerFn({ method: "GET" })
     const users = await sql<{ id: string; name: string | null; email: string | null }>`select id, name, email from "user" order by name`;
     const companies = await sql<{ id: string; name: string }>`select id, name from companies order by name`;
     const members = await sql<{ company_id: string; user_id: string; owner: boolean }>`select company_id, user_id, owner from company_members`;
-    return { users, companies, members };
+    const admins = await sql<{ user_id: string }>`select user_id from platform_admins`;
+    return { users, companies, members, admins: admins.map((a) => a.user_id) };
   });
 
 export const createCompany = createServerFn({ method: "POST" })

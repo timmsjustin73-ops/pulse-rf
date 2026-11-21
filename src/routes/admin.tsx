@@ -53,23 +53,38 @@ function AdminPage() {
 
 function People({ people, onChange }: { people: Awaited<ReturnType<typeof listPeople>>; onChange: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState("");
+  const [owner, setOwner] = useState(false);
+  const [admin, setAdmin] = useState(false);
+  const [msg, setMsg] = useState("");
   const user = people.users.find((u) => u.id === open);
-  const member = people.members.find((m) => m.user_id === open);
-  const [companyId, setCompanyId] = useState(member?.company_id ?? "");
-  const [owner, setOwner] = useState(Boolean(member?.owner));
+  function pick(id: string) {
+    setOpen(id);
+    setMsg("");
+    const m = people.members.find((row) => row.user_id === id);
+    setCompanyId(m?.company_id ?? "");
+    setOwner(Boolean(m?.owner));
+    setAdmin(people.admins.includes(id));
+  }
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <ul className="space-y-1 text-sm">
         {people.users.map((u) => (
           <li key={u.id}>
-            <button type="button" className="w-full rounded-lg border border-border px-3 py-2 text-left hover:bg-surface-2" onClick={() => { setOpen(u.id); const m = people.members.find((row) => row.user_id === u.id); setCompanyId(m?.company_id ?? ""); setOwner(Boolean(m?.owner)); }}>{u.name || "No name"} · {u.email}</button>
+            <button type="button" className={"w-full rounded-lg border px-3 py-2 text-left " + (open === u.id ? "border-primary bg-surface-2" : "border-border hover:bg-surface-2")} onClick={() => pick(u.id)}>{u.name || "No name"} · {u.email}</button>
           </li>
         ))}
       </ul>
       {user && (
-        <form className="space-y-3 rounded-xl border border-border p-4 text-sm" onSubmit={(e) => { e.preventDefault(); const admin = new FormData(e.currentTarget).get("admin") === "on"; void setUserAccess({ data: { userId: user.id, admin, companyId, owner } }).then(onChange); }}>
+        <form className="space-y-3 rounded-xl border border-border p-4 text-sm" onSubmit={(e) => {
+          e.preventDefault();
+          setMsg("Saving…");
+          void setUserAccess({ data: { userId: user.id, admin, companyId, owner } })
+            .then(() => { setMsg("Saved"); onChange(); })
+            .catch((err: unknown) => setMsg(err instanceof Error ? err.message : "Save failed"));
+        }}>
           <p className="font-medium">{user.name || user.email}</p>
-          <label className="flex items-center gap-2"><input type="checkbox" name="admin" /> Admin</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} /> Admin</label>
           <label className="block">Company
             <select className={fieldClass + " mt-1"} value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
               <option value="">None</option>
@@ -78,6 +93,7 @@ function People({ people, onChange }: { people: Awaited<ReturnType<typeof listPe
           </label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={owner} onChange={(e) => setOwner(e.target.checked)} /> Company owner</label>
           <button className={btnClass} type="submit">Save</button>
+          {msg && <p className="text-xs text-muted">{msg}</p>}
         </form>
       )}
     </div>
