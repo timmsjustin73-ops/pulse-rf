@@ -112,7 +112,7 @@ export function UserButton() {
           {label.charAt(0).toUpperCase()}
         </span>
       )}
-      <span className="text-sm font-medium">{label}</span>
+      <a href="/account" className="text-sm font-medium hover:underline">{label}</a>
       {authEnabled && !gateSession && (
         <button
           type="button"
