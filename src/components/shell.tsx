@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="px-4 py-6 lg:px-8">{children}</main>
-      <AgentBadge page={title} />
+      <AgentBadge page={titleFor(path)} />
         </div>
     </div>
   );
