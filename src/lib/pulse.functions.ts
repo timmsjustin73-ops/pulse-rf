@@ -359,7 +359,8 @@ async function insertEvent(
     if (taken.length === 0) break;
     join = makeCode();
   }
-  const blockers = JSON.stringify(defaultBlockers(input.region));
+  const acma = acmaBlockers(input.notes);
+    const blockers = JSON.stringify([...defaultBlockers(input.region), ...acma]);
   await sql`
     insert into events (id, owner_id, name, venue, city, region, starts_on, ends_on, spacing, notes, join_code, blockers)
     values (
@@ -1795,3 +1796,11 @@ export const finaliseBatch = createServerFn({ method: "POST" })
     await logActivity(sql, data.eventId, context.userId, `Finalised request ${data.batchId}`);
     return loadBundle(sql, data.eventId, context.userId);
   });
+
+function acmaBlockers(notes: string): { min: number; max: number; label: string }[] {
+  const city = notes.toLowerCase();
+  if (city.includes("melbourne")) return [{ min: 527, max: 534, label: "TV Melbourne" }, { min: 585, max: 592, label: "TV Melbourne" }];
+  if (city.includes("sydney")) return [{ min: 527, max: 534, label: "TV Sydney" }];
+  if (city.includes("brisbane")) return [{ min: 599, max: 606, label: "TV Brisbane" }];
+  return [];
+}

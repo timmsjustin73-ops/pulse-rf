@@ -409,7 +409,7 @@ function Plot({
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
   const [showIm, setShowIm] = useState(false);
-  const [focusId, setFocusId] = useState("");
+  const [focusId, setFocusId] = useState(data.issues[0]?.ids[0] ?? "");
   const [orders, setOrders] = useState<number[]>([2, 3, 5]);
   const [viewMin, setViewMin] = useState("");
   const [viewMax, setViewMax] = useState("");
@@ -710,7 +710,7 @@ export function MyRequests({
   const [qty, setQty] = useState(1);
   const [power, setPower] = useState(10);
   const [showIm, setShowIm] = useState(false);
-  const [focusId, setFocusId] = useState("");
+  const [focusId, setFocusId] = useState(data.issues[0]?.ids[0] ?? "");
   const [orders, setOrders] = useState<number[]>([2, 3, 5]);
   const [preferred, setPreferred] = useState("");
   const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number; preferred?: number }[]>([]);

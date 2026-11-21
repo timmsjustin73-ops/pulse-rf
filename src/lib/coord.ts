@@ -127,7 +127,13 @@ function ruleApplies(item: CoordItem, rule: SpectrumRule | null): rule is Spectr
   return item.bandMax > 500 && item.bandMin < 860;
 }
 
+function timesOverlap(a: Foot, b: Foot): boolean {
+  if (a.t0 == null || a.t1 == null || b.t0 == null || b.t1 == null) return true;
+  return a.t0 < b.t1 && b.t0 < a.t1;
+}
+
 function together(a: Foot, b: Foot): boolean {
+  if (!timesOverlap(a, b)) return false;
   const left = a.groupIds ?? [];
   const right = b.groupIds ?? [];
   if (left.length === 0 || right.length === 0) return false;
