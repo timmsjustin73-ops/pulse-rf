@@ -16,7 +16,7 @@ function AuditPage() {
           {data.requests.map((r) => (
             <tr key={r.id} className="border-t border-border">
               <td className="py-2">{r.label}</td>
-              <td>{r.created_by}</td>
+              <td>{"askedBy" in r && r.askedBy ? r.askedBy : r.created_by}</td>
               <td className="font-mono">{r.assigned_mhz ?? "waiting"}</td>
               <td>{r.flagged_mhz ? `from ${r.flagged_mhz}` : ""}</td>
             </tr>

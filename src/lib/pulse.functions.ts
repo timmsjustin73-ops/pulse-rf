@@ -265,8 +265,11 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     phones = [];
   }
   const phoneBy = new Map(phones.map((p) => [p.id, p.phone]));
+  const names = await sql<{ id: string; name: string | null; email: string | null }>`select id, name, email from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  const nameBy = new Map(names.map((n) => [n.id, n.name || n.email || "Unknown"]));
   const requestsClean = requests.map((r) => ({
     phone: phoneBy.get(r.created_by) ?? "",
+    askedBy: nameBy.get(r.created_by) ?? "",
     ...r,
     band_min: num(r.band_min),
     band_max: num(r.band_max),
