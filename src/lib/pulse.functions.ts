@@ -104,6 +104,7 @@ type RequestRow = {
   tuned_by: string | null;
   spare: boolean;
   power_mw: number;
+  density_mode: string;
   flag_reason: string | null;
   flagged_mhz: number | null;
   walkup: boolean;
