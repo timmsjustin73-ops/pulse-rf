@@ -2027,6 +2027,27 @@ export const agentAct = createServerFn({ method: "POST" })
       await sql`update request_batches set status = ${"final"} where event_id = ${data.eventId} and status <> ${"final"}`;
       return { reply: "Finalised the open requests.", href: "" };
     }
+    const addMatch = data.text.match(/add\s+(\d+)\s+([a-z0-9+-]+)/i);
+    if (addMatch && data.eventId) {
+      const count = Number(addMatch[1]);
+      const seriesWord = addMatch[2].toLowerCase();
+      const bandMatch = data.text.match(/\b([a-z]\d{2}|[a-z]\d-\d)\b/i);
+      const band = bandMatch?.[1]?.toUpperCase() ?? "";
+      const device = CATALOG.find((d) => d.series.toLowerCase().includes(seriesWord) && (!band || d.band.toUpperCase() === band));
+      if (!device) return { reply: "Which series and band? For example ULX-D L51.", href: "" };
+      const batchId = uid();
+      await sql`insert into request_batches (id, event_id, created_by, title, status) values (${batchId}, ${data.eventId}, ${context.userId}, ${"Agent"}, ${"submitted"})`;
+      for (let i = 1; i <= Math.min(count, 40); i++) {
+        await sql`insert into requests (
+          id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
+          band_min, band_max, bandwidth, mode, priority, notes, batch_id, power_mw
+        ) values (
+          ${uid()}, ${data.eventId}, ${null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
+          ${device.bandMin}, ${device.bandMax}, ${device.bandwidth}, ${device.mode}, ${"normal"}, ${""}, ${batchId}, ${10}
+        )`;
+      }
+      return { reply: `Added ${count} ${device.name}.`, href: `/events/${data.eventId}/requests` };
+    }
     if (words.includes("event") || words.includes("show")) {
       const nameMatch = data.text.match(/call (?:the )?(?:event|show) ([a-z0-9 ]+)/i);
       const name = nameMatch?.[1]?.trim() || "New show";
@@ -2057,7 +2078,7 @@ export const agentAct = createServerFn({ method: "POST" })
         ?? CATALOG.find((d) => words.includes(d.series.toLowerCase()));
       if (hit) return { reply: `On ${data.page}: matched ${hit.name}. Band ${hit.band}. Add it from Requests.`, href: "" };
     }
-    if (data.context) return { reply: `On ${data.page}: ${data.context.slice(0, 400)}`, href: "" };
+    return { reply: "Tell me the series and band, or say add 8 ULX-D L51.", href: "" };
     const live = await askGrok(data.page, data.text, data.context);
     if (live) return { reply: live, href: "" };
     const advice = rfAdvice(words);
