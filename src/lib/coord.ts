@@ -569,3 +569,29 @@ export function intermodHits(
   }
   return hits.sort((x, y) => x.order - y.order || x.product - y.product).slice(0, 40);
 }
+
+export function intermodProducts(carriers: { id: string; label: string; mhz: number }[], onlyId?: string): { mhz: number; order: number; label: string }[] {
+  const out: { mhz: number; order: number; label: string }[] = [];
+  const seen = new Set<string>();
+  const list = onlyId ? carriers.filter((c) => c.id === onlyId) : carriers;
+  const others = carriers;
+  for (const a of list) {
+    for (const b of others) {
+      if (a.id === b.id) continue;
+      const items: [number, number, string][] = [
+        [2, a.mhz + b.mhz, `${a.label}+${b.label}`],
+        [2, Math.abs(a.mhz - b.mhz), `|${a.label}-${b.label}|`],
+        [3, 2 * a.mhz - b.mhz, `2${a.label}-${b.label}`],
+        [5, 3 * a.mhz - 2 * b.mhz, `3${a.label}-2${b.label}`],
+      ];
+      for (const [order, mhz, label] of items) {
+        if (mhz < 400 || mhz > 900) continue;
+        const key = `${order}:${mhz.toFixed(3)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ mhz: Math.round(mhz * 1000) / 1000, order, label });
+      }
+    }
+  }
+  return out;
+}

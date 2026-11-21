@@ -72,6 +72,7 @@ function Dashboard() {
     setBusy("create");
     setError("");
     try {
+      if (address) setError("Address saved. ACMA lookup is manual for now.");
       const { id } = await createEvent({
         data: { name, venue, city, region, spacing, startsOn, endsOn, notes: address ? `Address: ${address}` : "" },
       });

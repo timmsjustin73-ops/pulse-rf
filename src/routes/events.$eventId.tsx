@@ -3,7 +3,7 @@ import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-rout
 import { EventContext, useEventWork, type Bundle, type EventWork } from "@/lib/event-context";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
 import { SpectrumChart } from "@/components/spectrum";
-import { intermodHits } from "@/lib/coord";
+import { intermodHits, intermodProducts } from "@/lib/coord";
 import { CoverageMap, rangeMetres } from "@/components/coverage";
 import {
   CATALOG,
@@ -408,6 +408,7 @@ function Plot({
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
   const [showIm, setShowIm] = useState(false);
+  const [focusId, setFocusId] = useState("");
   const [viewMin, setViewMin] = useState("");
   const [viewMax, setViewMax] = useState("");
   const strips = useMemo(() => bands(data), [data]);
@@ -451,7 +452,7 @@ function Plot({
             <label className="text-xs text-muted">End <input className={fieldClass + " ml-1 w-24"} inputMode="decimal" value={viewMax} placeholder={String(Math.ceil(autoHi))} onChange={(e) => setViewMax(e.target.value)} /></label>
             <button type="button" className={ghostClass} onClick={() => setShowIm((v) => !v)}>{showIm ? "Hide intermod" : "Show intermod"}</button>
           </div>
-          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodHits(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz, powerMw: 10 }))).map((h) => ({ mhz: h.product, order: h.order })) : []} />
+          <SpectrumChart carriers={carriers} marks={marks} min={Number(viewMin) || Math.floor(autoLo)} max={Number(viewMax) || Math.ceil(autoHi)} intermods={showIm ? intermodProducts(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz })), focusId || undefined).map((h) => ({ mhz: h.mhz, order: h.order })) : []} />
         </div>
       )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
@@ -531,7 +532,7 @@ function Plot({
                 }}
               >
                 <td className="px-3 py-2">
-                  <span className="block font-medium">{r.label}</span>
+                  <button type="button" className="block font-medium" onClick={() => setFocusId((id) => id === r.id ? "" : r.id)}>{r.label}</button>
                   <span className="text-xs uppercase text-muted">{categoryLabel(r.category)} · {r.priority}</span>
                 </td>
                 <td className="px-3 py-2 text-muted">{r.device_name}</td>
@@ -700,6 +701,7 @@ export function MyRequests({
   const [qty, setQty] = useState(1);
   const [power, setPower] = useState(10);
   const [showIm, setShowIm] = useState(false);
+  const [focusId, setFocusId] = useState("");
   const [preferred, setPreferred] = useState("");
   const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number; preferred?: number }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
