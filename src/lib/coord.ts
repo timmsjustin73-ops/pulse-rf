@@ -58,10 +58,11 @@ const GUARD: Record<Spacing, number> = {
   density: 0.125,
 };
 
-export function guardForItem(item: { densityMode?: string }, spacing: Spacing): number {
+/** Spacing comes from the radio's mode, not the show profile. */
+export function guardForItem(item: { densityMode?: string }, _spacing?: Spacing): number {
   if (item.densityMode === "shure-hd") return 0.125;
   if (item.densityMode === "senn-ld") return 0.3;
-  return GUARD[spacing];
+  return 0.35;
 }
 
 const IMD: Record<Spacing, number> = {
