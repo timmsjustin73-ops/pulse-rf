@@ -154,7 +154,7 @@ function EventScreen() {
     { to: "/events/$eventId/coordinate" as const, label: "Coordinate", show: manager },
     { to: "/events/$eventId/areas" as const, label: "Areas", show: true },
     { to: "/events/$eventId/scans" as const, label: "Scans", show: manager },
-    { to: "/events/$eventId/antennas" as const, label: "Antennas", show: manager },
+    { to: "/events/$eventId/antennas" as const, label: "Antennas", show: false },
     { to: "/events/$eventId/sheet" as const, label: "Sheet", show: true },
     { to: "/events/$eventId/settings" as const, label: "Settings", show: manager },
   ].filter((page) => page.show);
