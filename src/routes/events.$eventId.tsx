@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createContext, useContext } from "react";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
 import { SpectrumChart } from "@/components/spectrum";
 import { CoverageMap, rangeMetres } from "@/components/coverage";
@@ -56,8 +57,26 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/events/$eventId")({ component: EventRoute });
 
-type Bundle = Awaited<ReturnType<typeof getEvent>>;
-type Tab = "coord" | "mine" | "zones" | "scans" | "antennas" | "settings" | "sheet";
+export type Bundle = Awaited<ReturnType<typeof getEvent>>;
+
+export type EventWork = {
+  data: Bundle;
+  visible: Bundle;
+  custom: Awaited<ReturnType<typeof listCustomDevices>>;
+  manager: boolean;
+  canRequest: boolean;
+  busy: string;
+  run: (label: string, action: () => Promise<Bundle | { ok: boolean } | { id: string }>) => Promise<void>;
+  eventId: string;
+  onEdit: (id: string) => void;
+};
+
+const EventContext = createContext<EventWork | null>(null);
+export function useEventWork(): EventWork {
+  const value = useContext(EventContext);
+  if (!value) throw new Error("Missing event");
+  return value;
+}
 
 function EventRoute() {
   return (
@@ -74,8 +93,7 @@ function EventScreen() {
   const [data, setData] = useState<Bundle | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [tab, setTab] = useState<Tab>("coord");
-  const [custom, setCustom] = useState<Awaited<ReturnType<typeof listCustomDevices>>>([]);
+    const [custom, setCustom] = useState<Awaited<ReturnType<typeof listCustomDevices>>>([]);
   const [people, setPeople] = useState<{ user_id: string; name: string; editing?: string }[]>([]);
   const [editingId, setEditingId] = useState("");
   const [qr, setQr] = useState("");
@@ -142,6 +160,16 @@ function EventScreen() {
   const visible = manager
     ? data
     : { ...data, requests: data.requests.filter((r) => allowed.has(r.created_by)), intermods: [] as Bundle["intermods"] };
+  const pages = [
+    { to: "/events/$eventId/requests" as const, label: "Requests", show: true },
+    { to: "/events/$eventId/coordinate" as const, label: "Coordinate", show: manager },
+    { to: "/events/$eventId/areas" as const, label: "Areas", show: true },
+    { to: "/events/$eventId/scans" as const, label: "Scans", show: manager },
+    { to: "/events/$eventId/antennas" as const, label: "Antennas", show: manager },
+    { to: "/events/$eventId/sheet" as const, label: "Sheet", show: true },
+    { to: "/events/$eventId/settings" as const, label: "Settings", show: manager },
+  ].filter((page) => page.show);
+  
   const open = data.requests.filter((r) => r.assigned_mhz == null).length;
   const bad = data.issues.filter((i) => i.severity === "bad").length;
 
@@ -211,38 +239,24 @@ function EventScreen() {
       )}
       {qr && <img src={qr} alt="Join QR" className="h-36 w-36 rounded-lg bg-white p-2" />}
       {error && <Banner tone="bad">{error}</Banner>}
-      <div className="no-print flex gap-1 overflow-x-auto">
-        {(
-          [
-            ["coord", manager ? "Coordinate" : "Plot"],
-            ["mine", "My requests"],
-            ["zones", "Areas"],
-            ["scans", "Scans"],
-            ["antennas", "Antennas"],
-            ["settings", "Settings"],
-            ["sheet", "Sheet"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={
-              "h-10 shrink-0 rounded-full px-4 text-sm " +
-              (tab === id ? "bg-primary text-primary-fg" : "border border-border text-muted")
-            }
-          >
-            {label}
-          </button>
-        ))}
+      <div className="grid gap-6 lg:grid-cols-[200px_1fr]">
+        <nav className="no-print flex gap-1 overflow-x-auto lg:flex-col">
+          {pages.map((page) => (
+            <Link
+              key={page.to}
+              to={page.to}
+              params={{ eventId }}
+              className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-surface hover:text-fg"
+              activeProps={{ className: "rounded-lg bg-primary px-3 py-2 text-sm text-primary-fg" }}
+            >
+              {page.label}
+            </Link>
+          ))}
+        </nav>
+        <EventContext.Provider value={{ data, visible, custom, manager, canRequest, busy, run, eventId, onEdit: setEditingId }}>
+          <Outlet />
+        </EventContext.Provider>
       </div>
-      {tab === "coord" && <Coordinate data={visible} manager={manager} busy={busy} run={run} eventId={eventId} />}
-      {tab === "mine" && <MyRequests data={visible} custom={custom} canRequest={canRequest} busy={busy} run={run} onEdit={setEditingId} />}
-      {tab === "zones" && <Zones data={data} manager={manager} busy={busy} run={run} />}
-      {tab === "scans" && <Scans data={data} canRequest={canRequest} manager={manager} busy={busy} run={run} />}
-      {tab === "antennas" && <Antennas data={data} manager={manager} busy={busy} run={run} />}
-      {tab === "settings" && <Settings data={data} manager={manager} busy={busy} run={run} />}
-      {tab === "sheet" && <Sheet data={data} />}
     </div>
   );
 }
@@ -256,7 +270,7 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
   );
 }
 
-function Coordinate({
+export function Coordinate({
   data,
   manager,
   busy,
@@ -571,7 +585,7 @@ function Plot({
   );
 }
 
-function MyRequests({
+export function MyRequests({
   data,
   custom,
   canRequest,
@@ -712,12 +726,12 @@ function MyRequests({
           const batches = data.batches.filter((b) => b.zone_id === zone.id && data.requests.some((r) => r.batch_id === b.id));
           if (batches.length === 0) return null;
           return (
-            <div key={zone.id}>
-              <h3 className="text-sm font-medium">{zone.name}</h3>
+            <section key={zone.id} className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{zone.name}</h3>
               {batches.map((b) => (
           <div key={b.id} className="rounded-xl border border-border bg-surface p-3 text-sm">
             <div className="flex justify-between gap-3">
-              <span className="font-medium">{b.title}</span>
+              <span className="font-medium">Request · {b.title}</span>
               <span className="text-muted">{b.status}{b.return_note ? ` · ${b.return_note}` : ""}</span>
             </div>
             <ul className="mt-2 space-y-1 text-muted">
@@ -740,7 +754,7 @@ function MyRequests({
             )}
           </div>
               ))}
-            </div>
+            </section>
           );
         })}
       </div>
@@ -959,7 +973,7 @@ function RequestForm({
   );
 }
 
-function Zones({
+export function Zones({
   data,
   manager,
   busy,
@@ -1050,7 +1064,7 @@ function Groups({ data, busy, run }: { data: Bundle; busy: string; run: (label: 
   );
 }
 
-function Scans({
+export function Scans({
   data,
   canRequest,
   manager,
@@ -1146,7 +1160,7 @@ function Scans({
   );
 }
 
-function Settings({
+export function Settings({
   data,
   manager,
   busy,
@@ -1357,7 +1371,7 @@ function Settings({
   );
 }
 
-function Sheet({ data }: { data: Bundle }) {
+export function Sheet({ data }: { data: Bundle }) {
   const [area, setArea] = useState("all");
   const [company, setCompany] = useState("all");
   const companies = [...new Set(data.members.map((m) => m.company).filter(Boolean))] as string[];
@@ -1466,7 +1480,7 @@ function Sheet({ data }: { data: Bundle }) {
   );
 }
 
-function Antennas({
+export function Antennas({
   data,
   manager,
   busy,

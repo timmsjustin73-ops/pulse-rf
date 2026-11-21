@@ -29,6 +29,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <nav className="ml-2 flex items-center gap-1 text-sm">
             <TopLink to="/" label="Events" active={path === "/"} />
+            <TopLink to="/requests" label="Requests" active={path.startsWith("/requests")} />
+            <TopLink to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
             <TopLink to="/library" label="Devices" active={path.startsWith("/library")} />
           </nav>
           <div className="ml-auto flex items-center gap-2">
@@ -42,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function TopLink({ to, label, active }: { to: "/" | "/library"; label: string; active: boolean }) {
+function TopLink({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate"; label: string; active: boolean }) {
   return (
     <Link
       to={to}

@@ -10,14 +10,30 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CoordinateRouteImport } from './routes/coordinate'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RequestsRouteImport } from './routes/requests'
 import { Route as EventsEventIdRouteImport } from './routes/events.$eventId'
+import { Route as ShareTokenRouteImport } from './routes/share.$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as EventsEventIdIndexRouteImport } from './routes/events.$eventId.index'
+import { Route as EventsEventIdAntennasRouteImport } from './routes/events.$eventId.antennas'
+import { Route as EventsEventIdAreasRouteImport } from './routes/events.$eventId.areas'
+import { Route as EventsEventIdCoordinateRouteImport } from './routes/events.$eventId.coordinate'
+import { Route as EventsEventIdRequestsRouteImport } from './routes/events.$eventId.requests'
+import { Route as EventsEventIdScansRouteImport } from './routes/events.$eventId.scans'
+import { Route as EventsEventIdSettingsRouteImport } from './routes/events.$eventId.settings'
+import { Route as EventsEventIdSheetRouteImport } from './routes/events.$eventId.sheet'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoordinateRoute = CoordinateRouteImport.update({
+  id: '/coordinate',
+  path: '/coordinate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryRoute = LibraryRouteImport.update({
@@ -30,9 +46,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RequestsRoute = RequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EventsEventIdRoute = EventsEventIdRouteImport.update({
   id: '/events/$eventId',
   path: '/events/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTokenRoute = ShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -40,48 +66,165 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EventsEventIdIndexRoute = EventsEventIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdAntennasRoute = EventsEventIdAntennasRouteImport.update({
+  id: '/antennas',
+  path: '/antennas',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdAreasRoute = EventsEventIdAreasRouteImport.update({
+  id: '/areas',
+  path: '/areas',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdCoordinateRoute = EventsEventIdCoordinateRouteImport.update({
+  id: '/coordinate',
+  path: '/coordinate',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdRequestsRoute = EventsEventIdRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdScansRoute = EventsEventIdScansRouteImport.update({
+  id: '/scans',
+  path: '/scans',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdSettingsRoute = EventsEventIdSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
+const EventsEventIdSheetRoute = EventsEventIdSheetRouteImport.update({
+  id: '/sheet',
+  path: '/sheet',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
-  '/events/$eventId': typeof EventsEventIdRoute
+  '/requests': typeof RequestsRoute
+  '/events/$eventId': typeof EventsEventIdRouteWithChildren
+  '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
+  '/events/$eventId/areas': typeof EventsEventIdAreasRoute
+  '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
+  '/events/$eventId/scans': typeof EventsEventIdScansRoute
+  '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
+  '/events/$eventId/sheet': typeof EventsEventIdSheetRoute
+  '/events/$eventId/': typeof EventsEventIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
-  '/events/$eventId': typeof EventsEventIdRoute
+  '/requests': typeof RequestsRoute
+  '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
+  '/events/$eventId/areas': typeof EventsEventIdAreasRoute
+  '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
+  '/events/$eventId/scans': typeof EventsEventIdScansRoute
+  '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
+  '/events/$eventId/sheet': typeof EventsEventIdSheetRoute
+  '/events/$eventId': typeof EventsEventIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/coordinate': typeof CoordinateRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
-  '/events/$eventId': typeof EventsEventIdRoute
+  '/requests': typeof RequestsRoute
+  '/events/$eventId': typeof EventsEventIdRouteWithChildren
+  '/share/$token': typeof ShareTokenRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
+  '/events/$eventId/areas': typeof EventsEventIdAreasRoute
+  '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
+  '/events/$eventId/scans': typeof EventsEventIdScansRoute
+  '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
+  '/events/$eventId/sheet': typeof EventsEventIdSheetRoute
+  '/events/$eventId/': typeof EventsEventIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/library' | '/login' | '/events/$eventId' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/coordinate'
+    | '/library'
+    | '/login'
+    | '/requests'
+    | '/events/$eventId'
+    | '/share/$token'
+    | '/api/auth/$'
+    | '/events/$eventId/antennas'
+    | '/events/$eventId/areas'
+    | '/events/$eventId/coordinate'
+    | '/events/$eventId/requests'
+    | '/events/$eventId/scans'
+    | '/events/$eventId/settings'
+    | '/events/$eventId/sheet'
+    | '/events/$eventId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/library' | '/login' | '/events/$eventId' | '/api/auth/$'
+  to:
+    | '/'
+    | '/coordinate'
+    | '/library'
+    | '/login'
+    | '/requests'
+    | '/share/$token'
+    | '/api/auth/$'
+    | '/events/$eventId/antennas'
+    | '/events/$eventId/areas'
+    | '/events/$eventId/coordinate'
+    | '/events/$eventId/requests'
+    | '/events/$eventId/scans'
+    | '/events/$eventId/settings'
+    | '/events/$eventId/sheet'
+    | '/events/$eventId'
   id:
     | '__root__'
     | '/'
+    | '/coordinate'
     | '/library'
     | '/login'
+    | '/requests'
     | '/events/$eventId'
+    | '/share/$token'
     | '/api/auth/$'
+    | '/events/$eventId/antennas'
+    | '/events/$eventId/areas'
+    | '/events/$eventId/coordinate'
+    | '/events/$eventId/requests'
+    | '/events/$eventId/scans'
+    | '/events/$eventId/settings'
+    | '/events/$eventId/sheet'
+    | '/events/$eventId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CoordinateRoute: typeof CoordinateRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
-  EventsEventIdRoute: typeof EventsEventIdRoute
+  RequestsRoute: typeof RequestsRoute
+  EventsEventIdRoute: typeof EventsEventIdRouteWithChildren
+  ShareTokenRoute: typeof ShareTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -92,6 +235,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/coordinate': {
+      id: '/coordinate'
+      path: '/coordinate'
+      fullPath: '/coordinate'
+      preLoaderRoute: typeof CoordinateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library': {
@@ -108,11 +258,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/requests': {
+      id: '/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof RequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/events/$eventId': {
       id: '/events/$eventId'
       path: '/events/$eventId'
       fullPath: '/events/$eventId'
       preLoaderRoute: typeof EventsEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/$token': {
+      id: '/share/$token'
+      path: '/share/$token'
+      fullPath: '/share/$token'
+      preLoaderRoute: typeof ShareTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -122,14 +286,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/events/$eventId/': {
+      id: '/events/$eventId/'
+      path: '/'
+      fullPath: '/events/$eventId/'
+      preLoaderRoute: typeof EventsEventIdIndexRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/antennas': {
+      id: '/events/$eventId/antennas'
+      path: '/antennas'
+      fullPath: '/events/$eventId/antennas'
+      preLoaderRoute: typeof EventsEventIdAntennasRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/areas': {
+      id: '/events/$eventId/areas'
+      path: '/areas'
+      fullPath: '/events/$eventId/areas'
+      preLoaderRoute: typeof EventsEventIdAreasRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/coordinate': {
+      id: '/events/$eventId/coordinate'
+      path: '/coordinate'
+      fullPath: '/events/$eventId/coordinate'
+      preLoaderRoute: typeof EventsEventIdCoordinateRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/requests': {
+      id: '/events/$eventId/requests'
+      path: '/requests'
+      fullPath: '/events/$eventId/requests'
+      preLoaderRoute: typeof EventsEventIdRequestsRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/scans': {
+      id: '/events/$eventId/scans'
+      path: '/scans'
+      fullPath: '/events/$eventId/scans'
+      preLoaderRoute: typeof EventsEventIdScansRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/settings': {
+      id: '/events/$eventId/settings'
+      path: '/settings'
+      fullPath: '/events/$eventId/settings'
+      preLoaderRoute: typeof EventsEventIdSettingsRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
+    '/events/$eventId/sheet': {
+      id: '/events/$eventId/sheet'
+      path: '/sheet'
+      fullPath: '/events/$eventId/sheet'
+      preLoaderRoute: typeof EventsEventIdSheetRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
   }
 }
 
+interface EventsEventIdRouteChildren {
+  EventsEventIdAntennasRoute: typeof EventsEventIdAntennasRoute
+  EventsEventIdAreasRoute: typeof EventsEventIdAreasRoute
+  EventsEventIdCoordinateRoute: typeof EventsEventIdCoordinateRoute
+  EventsEventIdRequestsRoute: typeof EventsEventIdRequestsRoute
+  EventsEventIdScansRoute: typeof EventsEventIdScansRoute
+  EventsEventIdSettingsRoute: typeof EventsEventIdSettingsRoute
+  EventsEventIdSheetRoute: typeof EventsEventIdSheetRoute
+  EventsEventIdIndexRoute: typeof EventsEventIdIndexRoute
+}
+
+const EventsEventIdRouteChildren: EventsEventIdRouteChildren = {
+  EventsEventIdAntennasRoute: EventsEventIdAntennasRoute,
+  EventsEventIdAreasRoute: EventsEventIdAreasRoute,
+  EventsEventIdCoordinateRoute: EventsEventIdCoordinateRoute,
+  EventsEventIdRequestsRoute: EventsEventIdRequestsRoute,
+  EventsEventIdScansRoute: EventsEventIdScansRoute,
+  EventsEventIdSettingsRoute: EventsEventIdSettingsRoute,
+  EventsEventIdSheetRoute: EventsEventIdSheetRoute,
+  EventsEventIdIndexRoute: EventsEventIdIndexRoute,
+}
+
+const EventsEventIdRouteWithChildren = EventsEventIdRoute._addFileChildren(
+  EventsEventIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CoordinateRoute: CoordinateRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
-  EventsEventIdRoute: EventsEventIdRoute,
+  RequestsRoute: RequestsRoute,
+  EventsEventIdRoute: EventsEventIdRouteWithChildren,
+  ShareTokenRoute: ShareTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
