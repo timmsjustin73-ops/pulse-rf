@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-rout
 import { EventContext, useEventWork, type Bundle, type EventWork } from "@/lib/event-context";
 import { AppShell, Banner, btnClass, fieldClass, ghostClass, messageOf } from "@/components/shell";
 import { SpectrumChart } from "@/components/spectrum";
+import { intermodHits } from "@/lib/coord";
 import { CoverageMap, rangeMetres } from "@/components/coverage";
 import {
   CATALOG,
@@ -156,6 +157,7 @@ function EventScreen() {
     { to: "/events/$eventId/scans" as const, label: "Scans", show: manager },
     { to: "/events/$eventId/antennas" as const, label: "Antennas", show: false },
     { to: "/events/$eventId/sheet" as const, label: "Sheet", show: true },
+    { to: "/events/$eventId/reports" as const, label: "Reports", show: manager },
     { to: "/events/$eventId/settings" as const, label: "Settings", show: manager },
   ].filter((page) => page.show);
   
@@ -403,6 +405,7 @@ function Plot({
   busy: string;
   run: (label: string, action: () => Promise<Bundle>) => Promise<void>;
 }) {
+  const [showIm, setShowIm] = useState(false);
   const strips = useMemo(() => bands(data), [data]);
   const carriers = data.requests
     .filter((r) => r.assigned_mhz != null)
@@ -422,7 +425,12 @@ function Plot({
     <div className="space-y-4">
       <RequestTree data={data} />
       {carriers.length > 0 && (
-        <SpectrumChart carriers={carriers} marks={marks} min={Math.floor(lo)} max={Math.ceil(hi)} />
+        <div>
+          <div className="mb-2 flex justify-end">
+            <button type="button" className={ghostClass} onClick={() => setShowIm((v) => !v)}>{showIm ? "Hide intermod" : "Show intermod"}</button>
+          </div>
+          <SpectrumChart carriers={carriers} marks={marks} min={Math.floor(lo)} max={Math.ceil(hi)} intermods={showIm ? intermodHits(carriers.map((c) => ({ id: c.id, label: c.label, mhz: c.mhz, powerMw: 10 }))).map((h) => ({ mhz: h.product, order: h.order })) : []} />
+        </div>
       )}
       <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
         <p className="text-sm text-muted">
@@ -648,6 +656,7 @@ export function MyRequests({
   const [spare, setSpare] = useState(false);
   const [qty, setQty] = useState(1);
   const [power, setPower] = useState(10);
+  const [showIm, setShowIm] = useState(false);
   const [preferred, setPreferred] = useState("");
   const [lines, setLines] = useState<{ id?: string; label: string; spare: boolean; deviceKey: string; deviceName: string; manufacturer: string; bandMin: number; bandMax: number; bandwidth: number; mode: "carrier" | "band"; category: string; powerMw?: number; preferred?: number }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);

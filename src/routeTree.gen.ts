@@ -23,6 +23,7 @@ import { Route as EventsEventIdIndexRouteImport } from './routes/events.$eventId
 import { Route as EventsEventIdAntennasRouteImport } from './routes/events.$eventId.antennas'
 import { Route as EventsEventIdAreasRouteImport } from './routes/events.$eventId.areas'
 import { Route as EventsEventIdCoordinateRouteImport } from './routes/events.$eventId.coordinate'
+import { Route as EventsEventIdReportsRouteImport } from './routes/events.$eventId.reports'
 import { Route as EventsEventIdRequestsRouteImport } from './routes/events.$eventId.requests'
 import { Route as EventsEventIdScansRouteImport } from './routes/events.$eventId.scans'
 import { Route as EventsEventIdSettingsRouteImport } from './routes/events.$eventId.settings'
@@ -98,6 +99,11 @@ const EventsEventIdCoordinateRoute = EventsEventIdCoordinateRouteImport.update({
   path: '/coordinate',
   getParentRoute: () => EventsEventIdRoute,
 } as any)
+const EventsEventIdReportsRoute = EventsEventIdReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => EventsEventIdRoute,
+} as any)
 const EventsEventIdRequestsRoute = EventsEventIdRequestsRouteImport.update({
   id: '/requests',
   path: '/requests',
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
   '/events/$eventId/areas': typeof EventsEventIdAreasRoute
   '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/reports': typeof EventsEventIdReportsRoute
   '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
   '/events/$eventId/scans': typeof EventsEventIdScansRoute
   '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
   '/events/$eventId/areas': typeof EventsEventIdAreasRoute
   '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/reports': typeof EventsEventIdReportsRoute
   '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
   '/events/$eventId/scans': typeof EventsEventIdScansRoute
   '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/events/$eventId/antennas': typeof EventsEventIdAntennasRoute
   '/events/$eventId/areas': typeof EventsEventIdAreasRoute
   '/events/$eventId/coordinate': typeof EventsEventIdCoordinateRoute
+  '/events/$eventId/reports': typeof EventsEventIdReportsRoute
   '/events/$eventId/requests': typeof EventsEventIdRequestsRoute
   '/events/$eventId/scans': typeof EventsEventIdScansRoute
   '/events/$eventId/settings': typeof EventsEventIdSettingsRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/events/$eventId/antennas'
     | '/events/$eventId/areas'
     | '/events/$eventId/coordinate'
+    | '/events/$eventId/reports'
     | '/events/$eventId/requests'
     | '/events/$eventId/scans'
     | '/events/$eventId/settings'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/events/$eventId/antennas'
     | '/events/$eventId/areas'
     | '/events/$eventId/coordinate'
+    | '/events/$eventId/reports'
     | '/events/$eventId/requests'
     | '/events/$eventId/scans'
     | '/events/$eventId/settings'
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/events/$eventId/antennas'
     | '/events/$eventId/areas'
     | '/events/$eventId/coordinate'
+    | '/events/$eventId/reports'
     | '/events/$eventId/requests'
     | '/events/$eventId/scans'
     | '/events/$eventId/settings'
@@ -354,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsEventIdCoordinateRouteImport
       parentRoute: typeof EventsEventIdRoute
     }
+    '/events/$eventId/reports': {
+      id: '/events/$eventId/reports'
+      path: '/reports'
+      fullPath: '/events/$eventId/reports'
+      preLoaderRoute: typeof EventsEventIdReportsRouteImport
+      parentRoute: typeof EventsEventIdRoute
+    }
     '/events/$eventId/requests': {
       id: '/events/$eventId/requests'
       path: '/requests'
@@ -389,6 +408,7 @@ interface EventsEventIdRouteChildren {
   EventsEventIdAntennasRoute: typeof EventsEventIdAntennasRoute
   EventsEventIdAreasRoute: typeof EventsEventIdAreasRoute
   EventsEventIdCoordinateRoute: typeof EventsEventIdCoordinateRoute
+  EventsEventIdReportsRoute: typeof EventsEventIdReportsRoute
   EventsEventIdRequestsRoute: typeof EventsEventIdRequestsRoute
   EventsEventIdScansRoute: typeof EventsEventIdScansRoute
   EventsEventIdSettingsRoute: typeof EventsEventIdSettingsRoute
@@ -400,6 +420,7 @@ const EventsEventIdRouteChildren: EventsEventIdRouteChildren = {
   EventsEventIdAntennasRoute: EventsEventIdAntennasRoute,
   EventsEventIdAreasRoute: EventsEventIdAreasRoute,
   EventsEventIdCoordinateRoute: EventsEventIdCoordinateRoute,
+  EventsEventIdReportsRoute: EventsEventIdReportsRoute,
   EventsEventIdRequestsRoute: EventsEventIdRequestsRoute,
   EventsEventIdScansRoute: EventsEventIdScansRoute,
   EventsEventIdSettingsRoute: EventsEventIdSettingsRoute,

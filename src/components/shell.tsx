@@ -33,8 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Side to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
           <Side to="/library" label="My Devices" active={path.startsWith("/library")} />
           {user?.primaryEmail === "justin@jtlive.tech" && <Side to="/admin" label="Admin" active={path.startsWith("/admin")} />}
-          {user?.primaryEmail === "justin@jtlive.tech" && <Side to="/permissions" label="Permissions" active={path.startsWith("/permissions")} />}
-        </nav>
+                  </nav>
         <div className="hidden items-center gap-2 px-4 py-4 lg:flex">
           <NoticeBell />
           <UserButton />

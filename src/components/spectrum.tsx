@@ -14,11 +14,13 @@ export function SpectrumChart({
   marks,
   min,
   max,
+  intermods = [],
 }: {
   carriers: Carrier[];
   marks: Mark[];
   min: number;
   max: number;
+  intermods?: { mhz: number; order: number }[];
 }) {
   const span = Math.max(max - min, 1);
   const x = (mhz: number) => ((mhz - min) / span) * 1000;
