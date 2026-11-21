@@ -32,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Side to="/requests" label="My Requests" active={path.startsWith("/requests")} />
           <Side to="/coordinate" label="Coordinate" active={path.startsWith("/coordinate")} />
           <Side to="/library" label="My Devices" active={path.startsWith("/library")} />
+          {user?.primaryEmail === "justin@jtlive.tech" && <Side to="/admin" label="Admin" active={path.startsWith("/admin")} />}
         </nav>
         <div className="hidden items-center gap-2 px-4 py-4 lg:flex">
           <NoticeBell />
@@ -49,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate"; label: string; active: boolean }) {
+function Side({ to, label, active }: { to: "/" | "/library" | "/requests" | "/coordinate" | "/admin"; label: string; active: boolean }) {
   return (
     <Link to={to} className={"rounded-lg px-3 py-2 text-sm " + (active ? "bg-bg font-medium text-fg" : "text-muted hover:bg-bg hover:text-fg")}>
       {label}

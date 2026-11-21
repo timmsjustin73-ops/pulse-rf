@@ -128,6 +128,10 @@ function Dashboard() {
               <span className="mb-1 block text-muted">Venue</span>
               <input className={fieldClass} value={venue} onChange={(e) => setVenue(e.target.value)} />
             </label>
+            <label className="block text-sm sm:col-span-2">
+              <span className="mb-1 block text-muted">Address for ACMA lookup</span>
+              <input className={fieldClass} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Docklands stage, Melbourne VIC" />
+            </label>
             <label className="block text-sm">
               <span className="mb-1 block text-muted">City</span>
               <input className={fieldClass} value={city} onChange={(e) => setCity(e.target.value)} />
