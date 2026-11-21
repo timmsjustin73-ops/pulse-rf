@@ -2058,6 +2058,8 @@ export const agentAct = createServerFn({ method: "POST" })
       if (hit) return { reply: `On ${data.page}: matched ${hit.name}. Band ${hit.band}. Add it from Requests.`, href: "" };
     }
     if (data.context) return { reply: `On ${data.page}: ${data.context.slice(0, 400)}`, href: "" };
+    const advice = rfAdvice(words);
+    if (advice) return { reply: advice, href: "" };
     return { reply: `On ${data.page}: nothing loaded on this page yet.`, href: "" };
   });
 
@@ -2066,4 +2068,26 @@ function nextWeekday(day: number): string {
   const add = (day - now.getDay() + 7) % 7 || 7;
   now.setDate(now.getDate() + add);
   return now.toISOString().slice(0, 10);
+}
+
+function rfAdvice(words: string): string {
+  if (words.includes("density") || words.includes("more radio") || words.includes("fit more")) {
+    return "Use the radio's own mode. ULX-D HD is 125 kHz at 1 mW, up to 47 in a 6 MHz channel. EW-DX Link Density is 300 kHz. Keep that block away from analog and IEMs. Do not go tighter than the maker.";
+  }
+  if (words.includes("intermod")) {
+    return "2A-B and A+B-C matter when packs are close. A 5th order across two stages does not. Power widens the guard. 1 mW is tight. 50 mW is wide.";
+  }
+  if (words.includes("led") || words.includes("wall") || words.includes("scan")) {
+    return "Scan with the LED wall on and the lights up. A blank wall already spikes the floor. A plot on a dead room is a guess. Name the wall as a blocker.";
+  }
+  if (words.includes("tv") || words.includes("acma") || words.includes("postcode")) {
+    return "Put the postcode in the address. Pulse asks ACMA for licensed TV between 520 and 694 and blocks it. If that misses, it uses the city list.";
+  }
+  if (words.includes("iem")) {
+    return "An IEM is louder than a mic. Keep IEMs in their own slice. Do not place them inside a dense mic block.";
+  }
+  if (words.includes("spacing") || words.includes("how close")) {
+    return "ULX-D and Axient 350 kHz, or 125 in HD. QLX-D 350. SLX-D 400. EW-DX 600, or 300 in LD. Digital 6000 400, or 200 in LD. Analog and IEMs 400 to 500.";
+  }
+  return "";
 }
