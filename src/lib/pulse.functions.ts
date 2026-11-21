@@ -1796,11 +1796,12 @@ export const finaliseBatch = createServerFn({ method: "POST" })
     await requireAccess(sql, data.eventId, context.userId, "manager");
     await sql`update request_batches set status = ${"final"} where id = ${data.batchId}`;
     await logActivity(sql, data.eventId, context.userId, `Finalised request ${data.batchId}`);
-    const people = await sql<{ email: string | null; notify_email: boolean }>`
-      select email, notify_email from "user" where id in (select created_by from requests where batch_id = ${data.batchId})
+    const people = await sql<{ email: string | null; notify_email: boolean; notify_whatsapp: boolean; phone: string }>`
+      select email, notify_email, notify_whatsapp, phone from "user" where id in (select created_by from requests where batch_id = ${data.batchId})
     `;
     for (const person of people) {
-      if (person.notify_email && person.email) await sendMail(person.email, "Pulse RF request finalised", "Your request has been finalised. Open My Requests for the frequencies.");
+      const wa = person.phone ? `https://wa.me/${person.phone.replace(/\D/g, "")}` : "";
+      if (person.notify_email && person.email) await sendMail(person.email, "Pulse RF request finalised", `Your request has been finalised. Open My Requests for the frequencies.${wa ? " WhatsApp: " + wa : ""}`);
     }
     return loadBundle(sql, data.eventId, context.userId);
   });
