@@ -265,7 +265,12 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     phones = [];
   }
   const phoneBy = new Map(phones.map((p) => [p.id, p.phone]));
-  const names = await sql<{ id: string; name: string | null; email: string | null }>`select id, name, email from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  let names: { id: string; name: string | null; email: string | null }[] = [];
+  try {
+    names = await sql<{ id: string; name: string | null; email: string | null }>`select id, name, email from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  } catch {
+    names = [];
+  }
   const nameBy = new Map(names.map((n) => [n.id, n.name || n.email || "Unknown"]));
   const requestsClean = requests.map((r) => ({
     phone: phoneBy.get(r.created_by) ?? "",
@@ -1932,8 +1937,8 @@ export const deleteUser = createServerFn({ method: "POST" })
     if (data.userId === context.userId) throw new Error("You cannot delete yourself.");
     await sql`delete from company_members where user_id = ${data.userId}`;
     await sql`delete from event_members where user_id = ${data.userId}`;
-    await sql`delete from "session" where user_id = ${data.userId}`;
-    await sql`delete from "account" where user_id = ${data.userId}`;
+    await sql`delete from "session" where "userId" = ${data.userId}`;
+    await sql`delete from "account" where "userId" = ${data.userId}`;
     await sql`delete from "user" where id = ${data.userId}`;
     return { ok: true as const };
   });
