@@ -1995,7 +1995,7 @@ export const agentAdd = createServerFn({ method: "POST" })
 
 export const agentAct = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ page: z.string(), eventId: z.string().optional().default(""), text: z.string().min(2).max(200), context: z.string().optional().default("") }))
+  .validator(z.object({ page: z.string(), eventId: z.string().optional().default(""), zoneId: z.string().optional().default(""), text: z.string().min(2).max(200), context: z.string().optional().default("") }))
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     const me = await sql<{ agent_enabled: boolean }>`select agent_enabled from "user" where id = ${context.userId}`;
@@ -2015,7 +2015,7 @@ export const agentAct = createServerFn({ method: "POST" })
                 id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
                 band_min, band_max, bandwidth, mode, priority, notes, batch_id, power_mw
               ) values (
-                ${uid()}, ${data.eventId}, ${null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
+                ${uid()}, ${data.eventId}, ${data.zoneId || null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
                 ${device.bandMin}, ${device.bandMax}, ${device.bandwidth}, ${device.mode}, ${"normal"}, ${""}, ${batchId}, ${10}
               )`;
             }
@@ -2069,7 +2069,7 @@ export const agentAct = createServerFn({ method: "POST" })
           id, event_id, zone_id, created_by, category, label, device_key, device_name, manufacturer,
           band_min, band_max, bandwidth, mode, priority, notes, batch_id, power_mw
         ) values (
-          ${uid()}, ${data.eventId}, ${null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
+          ${uid()}, ${data.eventId}, ${data.zoneId || null}, ${context.userId}, ${device.category}, ${device.series + " " + i}, ${device.key}, ${device.name}, ${device.manufacturer},
           ${device.bandMin}, ${device.bandMax}, ${device.bandwidth}, ${device.mode}, ${"normal"}, ${""}, ${batchId}, ${10}
         )`;
       }

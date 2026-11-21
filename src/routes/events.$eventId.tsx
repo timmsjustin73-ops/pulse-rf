@@ -760,8 +760,16 @@ export function MyRequests({
             <input className={fieldClass + " mt-1"} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Main stage vocals" />
           </label>
           <label className="text-sm">Zone
-            <select className={fieldClass + " mt-1"} value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
+            <select className={fieldClass + " mt-1"} value={zoneId} onChange={(e) => {
+              if (e.target.value === "new") {
+                const name = window.prompt("New zone");
+                if (name) void run("zone", () => addZone({ data: { eventId: data.event.id, name, isolated: false } }));
+                return;
+              }
+              setZoneId(e.target.value);
+            }}>
               {data.zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
+              <option value="new">New zone</option>
             </select>
           </label>
           <label className="text-sm">Manufacturer

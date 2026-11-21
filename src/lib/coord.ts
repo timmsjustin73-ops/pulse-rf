@@ -147,6 +147,7 @@ function timesOverlap(a: Foot, b: Foot): boolean {
 
 function together(a: Foot, b: Foot): boolean {
   if (!timesOverlap(a, b)) return false;
+  if (a.zoneId && a.zoneId === b.zoneId) return true;
   const left = a.groupIds ?? [];
   const right = b.groupIds ?? [];
   if (left.length === 0 || right.length === 0) return false;
