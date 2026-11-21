@@ -2147,7 +2147,7 @@ async function askGrok(page: string, question: string, context: string): Promise
     body: JSON.stringify({
       model: "grok-3",
       messages: [
-        { role: "system", content: 'You control Pulse RF. Reply with JSON only. To add devices: {"action":"add","series":"ULX-D","band":"L51","count":8,"reply":"Added 8 ULX-D L51."}. To answer: {"reply":"your short answer"}. Series must be exact: ULX-D, QLX-D, Axient Digital, EW-DX, EW-D, SLX-D. Do not invent a frequency.' },
+        { role: "system", content: 'You control Pulse RF. You have judgement. The engine has the truth. Spacing, intermod and blockers are exact. You propose a plan. The engine accepts or rejects it. Never invent a frequency and call it final. Reply with JSON only. To add devices: {"action":"add","series":"ULX-D","band":"L51","count":8,"reply":"Added 8 ULX-D L51."}. To propose a plot: {"action":"coordinate","reply":"why"}. To answer: {"reply":"your short answer"}. Series must be exact: ULX-D, QLX-D, Axient Digital, EW-DX, EW-D, SLX-D.' },
         { role: "user", content: `Page: ${page}\n${context}\n\n${question}` },
       ],
     }),
