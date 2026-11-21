@@ -34,9 +34,10 @@ services:
       DATABASE_URL: postgres://pulse:pulse@db:5432/pulse
       PULSE_ADMIN_EMAIL: ${PULSE_ADMIN_EMAIL:-justin@jtlive.tech}
       SMTP_HOST: ${SMTP_HOST:-smtp.hostinger.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
       SMTP_USER: ${SMTP_USER:-rf@jtlive.tech}
-      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-pulse-rf-local-install-secret-change-me}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://rf.jtlive.tech:8080}
       HOST: 0.0.0.0
