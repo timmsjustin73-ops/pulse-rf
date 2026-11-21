@@ -559,6 +559,9 @@ const trace = data.scans[0]?.trace ?? [];
                         if (window.confirm(`Offer ${offer} MHz?`)) void run("offer", () => updateRequest({ data: { eventId: data.event.id, requestId: r.id, locked: true, assigned: Number(offer), priority: (r.priority === "critical" || r.priority === "high" || r.priority === "low" ? r.priority : "normal"), zoneId: r.zone_id ?? data.zones[0]?.id ?? "" } }));
                       }}>Suggest</button>
                       <button type="button" className="underline" onClick={() => { if (r.batch_id) void run("final", () => finaliseBatch({ data: { eventId: data.event.id, batchId: r.batch_id! } })); }}>Finalise</button>
+                      {"phone" in r && r.phone ? <a className="ml-1 underline" href={"tel:" + r.phone}>Call {r.phone}</a> : null}
+                      {"phone" in r && r.phone ? <a className="ml-1 underline" href={"https://wa.me/" + String(r.phone).replace(/\D/g, "") + "?text=" + encodeURIComponent("Pulse RF: your frequency is ready.")} target="_blank" rel="noreferrer">WhatsApp</a> : null}
+                      
                       <button type="button" className="underline" onClick={() => { const note = window.prompt("Private note") ?? ""; void run("note", () => setPrivateNote({ data: { eventId: data.event.id, requestId: r.id, note } })); }}>Note</button>
                       <button type="button" className="underline" onClick={() => { if (r.assigned_mhz && r.zone_id) void run("hold", () => addHold({ data: { eventId: data.event.id, zoneId: r.zone_id!, mhz: r.assigned_mhz!, label: r.label } })); }}>Hold</button>
                     </span>

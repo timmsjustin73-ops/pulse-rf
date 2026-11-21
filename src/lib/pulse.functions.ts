@@ -258,7 +258,10 @@ async function loadBundle(sql: Sql, eventId: string, userId: string) {
     ? (await sql<{ user_id: string }>`select user_id from company_members where company_id = ${company.id}`).map((r) => r.user_id)
     : [];
   const zonesClean = zones.map((z) => ({ ...z, isolated: flag(z.isolated) }));
+  const phones = await sql<{ id: string; phone: string }>`select id, phone from "user" where id in (select created_by from requests where event_id = ${eventId})`;
+  const phoneBy = new Map(phones.map((p) => [p.id, p.phone]));
   const requestsClean = requests.map((r) => ({
+    phone: phoneBy.get(r.created_by) ?? "",
     ...r,
     band_min: num(r.band_min),
     band_max: num(r.band_max),
@@ -1808,9 +1811,18 @@ export const finaliseBatch = createServerFn({ method: "POST" })
 
 function acmaBlockers(notes: string): { min: number; max: number; label: string }[] {
   const city = notes.toLowerCase();
-  if (city.includes("melbourne")) return [{ min: 527, max: 534, label: "TV Melbourne" }, { min: 585, max: 592, label: "TV Melbourne" }];
-  if (city.includes("sydney")) return [{ min: 527, max: 534, label: "TV Sydney" }];
-  if (city.includes("brisbane")) return [{ min: 599, max: 606, label: "TV Brisbane" }];
+  const known: Record<string, { min: number; max: number; label: string }[]> = {
+    melbourne: [{ min: 527, max: 534, label: "TV Melbourne" }, { min: 585, max: 592, label: "TV Melbourne" }],
+    sydney: [{ min: 527, max: 534, label: "TV Sydney" }, { min: 564, max: 571, label: "TV Sydney" }],
+    brisbane: [{ min: 599, max: 606, label: "TV Brisbane" }],
+    adelaide: [{ min: 585, max: 592, label: "TV Adelaide" }],
+    perth: [{ min: 536, max: 543, label: "TV Perth" }],
+    hobart: [{ min: 655, max: 662, label: "TV Hobart" }],
+    canberra: [{ min: 599, max: 606, label: "TV Canberra" }],
+    darwin: [{ min: 655, max: 662, label: "TV Darwin" }],
+    geelong: [{ min: 527, max: 534, label: "TV Geelong" }],
+  };
+  for (const [name, blocks] of Object.entries(known)) if (city.includes(name)) return blocks;
   return [];
 }
 
